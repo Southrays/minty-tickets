@@ -52,7 +52,16 @@ export default function Navbar({ isMobile }) {
         <Link
           to="/create"
           className={isMobile ? "bg" : "bs"}
-          style={{borderRadius:12,padding:isMobile?"7px 12px":"8px 16px",fontSize:13,gap:6, textDecoration:"none", color:"inherit", fontFamily:"Outfit",fontWeight:600,color:isMobile?V.text2:undefined}}
+          style={{
+            borderRadius: 12,
+            padding: isMobile ? "7px 12px" : "8px 16px",
+            fontSize: 13,
+            gap: 6,
+            textDecoration: "none",
+            fontFamily: "Outfit",
+            fontWeight: 600,
+            color: isMobile ? V.text2 : "inherit" // merge both
+          }}
         >
           <Plus size={14}/> Host Event
         </Link>

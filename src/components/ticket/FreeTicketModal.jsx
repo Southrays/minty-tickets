@@ -4,7 +4,7 @@ import { V } from "../../utils/constants";
 import { useWallet } from "../../context/WalletContext";
 
 export default function FreeTicketModal({ event, onClose }) {
-  const { wallet, requireWallet } = useWallet();
+  const { requireWallet } = useWallet();
   const [mode,setMode]=useState(null); const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [busy,setBusy]=useState(false); const [done,setDone]=useState(false);
   const submitEmail=() => { if(!name.trim()||!email.trim()) return; setBusy(true); setTimeout(()=>{setBusy(false);setDone(true);},2000); };
   if(done) return (
