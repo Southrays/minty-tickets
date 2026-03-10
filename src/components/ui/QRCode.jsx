@@ -1,18 +1,18 @@
-export default function QRCode({ data="MINTY", size=130, dark="#1F2937", light="white" }) {
-  const seed = data.split("").reduce((a,c) => a+c.charCodeAt(0), 0);
-  const rng  = i => ((seed*9301+49297*i)%233280)/233280;
-  const M=21, cs=size/M, cells=[];
-  const finder = (sr,sc) => { for(let r=0;r<7;r++) for(let c=0;c<7;c++) { const o=r===0||r===6||c===0||c===6,i=r>=2&&r<=4&&c>=2&&c<=4; if(o||i) cells.push({r:sr+r,c:sc+c}); } };
-  finder(0,0); finder(0,14); finder(14,0);
-  for(let i=8;i<13;i+=2){ cells.push({r:6,c:i}); cells.push({r:i,c:6}); }
-  const res = new Set(cells.map(({r,c}) => `${r},${c}`));
-  for(let i=0;i<=7;i++){ res.add(`7,${i}`); res.add(`${i},7`); res.add(`7,${13+i}`); res.add(`${i},13`); }
-  let idx=0;
-  for(let r=0;r<M;r++) for(let c=0;c<M;c++) if(!res.has(`${r},${c}`) && rng(idx++)>0.48) cells.push({r,c});
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <rect width={size} height={size} rx={6} fill={light}/>
-      {cells.map(({r,c},i) => <rect key={i} x={c*cs+0.4} y={r*cs+0.4} width={cs-0.8} height={cs-0.8} rx={cs*.14} fill={dark}/>)}
-    </svg>
-  );
-}
+// export default function QRCode({ data="MINTY", size=130, dark="#1F2937", light="white" }) {
+//   const seed = data.split("").reduce((a,c) => a+c.charCodeAt(0), 0);
+//   const rng  = i => ((seed*9301+49297*i)%233280)/233280;
+//   const M=21, cs=size/M, cells=[];
+//   const finder = (sr,sc) => { for(let r=0;r<7;r++) for(let c=0;c<7;c++) { const o=r===0||r===6||c===0||c===6,i=r>=2&&r<=4&&c>=2&&c<=4; if(o||i) cells.push({r:sr+r,c:sc+c}); } };
+//   finder(0,0); finder(0,14); finder(14,0);
+//   for(let i=8;i<13;i+=2){ cells.push({r:6,c:i}); cells.push({r:i,c:6}); }
+//   const res = new Set(cells.map(({r,c}) => `${r},${c}`));
+//   for(let i=0;i<=7;i++){ res.add(`7,${i}`); res.add(`${i},7`); res.add(`7,${13+i}`); res.add(`${i},13`); }
+//   let idx=0;
+//   for(let r=0;r<M;r++) for(let c=0;c<M;c++) if(!res.has(`${r},${c}`) && rng(idx++)>0.48) cells.push({r,c});
+//   return (
+//     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+//       <rect width={size} height={size} rx={6} fill={light}/>
+//       {cells.map(({r,c},i) => <rect key={i} x={c*cs+0.4} y={r*cs+0.4} width={cs-0.8} height={cs-0.8} rx={cs*.14} fill={dark}/>)}
+//     </svg>
+//   );
+// }
