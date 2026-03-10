@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Lock, Unlock, Clock, Shield, CheckCircle, AlertCircle, RefreshCw, EyeOff, Wallet } from "lucide-react";
 import QRCode from "../ui/QRCode";
 import { V, CONTRACT_ADDRESS } from "../../utils/constants";
-import { formatDate, formatTime, shortAddr } from "../../utils/format";
+import { formatDate, formatTime } from "../../utils/format";
 import { useWallet } from "../../context/WalletContext";
 import { signMessage } from "../../utils/contract";
 
@@ -262,7 +262,7 @@ export default function TicketModal({ ticket, onClose }) {
                   ? <><RefreshCw size={15} className="spin"/>Waiting for signature…</>
                   : qrState==="expired"
                     ? <><RefreshCw size={15}/>Re-reveal QR (sign again)</>
-                    : <><Lock size={15}/>Reveal QR Code (5-min session)</>
+                    : <><Lock size={15}/>Reveal QR Code (Valid for 5 mins)</>
                 }
               </button>
               {signErr && (

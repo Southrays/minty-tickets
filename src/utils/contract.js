@@ -8,6 +8,7 @@ export const MINTY_ABI = [
   "event TicketCheckedIn(uint256 indexed tokenId, uint256 indexed eventId)",
   "function events(uint256) external view returns (uint256 id,address organizer,string name,string metadataCid,uint256 startTime,uint256 endTime,uint256 ticketPrice,uint256 maxTickets,uint256 soldTickets,string imageURI,bytes32 merkleRoot,bool acceptsOffchainTickets)",
   "function tickets(uint256) external view returns (uint256 eventId,string metadataCid,bool checkedIn,uint256 mintTime)",
+  "function ownerOf(uint256) external view returns (address)",
   "function getUserTicketIds(address) external view returns (uint256[])",
   "function getOrganizerEvents(address) external view returns (uint256[])",
   "function totalEvents() external view returns (uint256)",

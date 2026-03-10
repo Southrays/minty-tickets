@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Wallet, Plus, DollarSign, Ticket, Calendar, RefreshCw, CheckCircle, BarChart3, ScanLine, AlertCircle } from "lucide-react";
 import { V } from "../utils/constants";
-import { formatDate, shortAddr, soldPct } from "../utils/format";
+import { formatDate,  soldPct } from "../utils/format";
 import { useWallet } from "../context/WalletContext";
 import { useApp } from "../context/AppContext";
 import { withdrawOrganizerFunds } from "../utils/contract";

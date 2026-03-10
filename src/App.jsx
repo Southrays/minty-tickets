@@ -52,7 +52,7 @@ function AppInner() {
           <Route path="/explore" element={<ExplorePage />} />
 
           <Route
-            path="/event/:id"
+            path="/event/:eventId"
             element={<EventDetailsPage onTicketBought={handleTicketBought} />}
           />
 
