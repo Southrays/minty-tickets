@@ -42,7 +42,7 @@ export default function HomePage({ setSelectedEvent }) {
             Host your next event<br /><span className="gt">on the blockchain</span>
           </h1>
           <p style={{ fontSize: 18, color: V.muted, lineHeight: 1.7, maxWidth: 480, margin: "0 auto 40px" }}>
-            Create events, sell NFT tickets, and verify attendance — all on-chain. No middlemen, no fraud.
+            Create events, sell NFT tickets, and verify attendance — no ticket Reselling. Every guest is Unique.
           </p>
 
           {/* Search bar */}
