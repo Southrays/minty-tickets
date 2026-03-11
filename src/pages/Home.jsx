@@ -37,10 +37,7 @@ export default function HomePage({ setSelectedEvent }) {
         <div style={{ position: "absolute", width: 700, height: 700, borderRadius: "50%", background: "radial-gradient(circle,rgba(139,92,246,.08) 0%,transparent 70%)", top: -250, left: "50%", transform: "translateX(-50%)", pointerEvents: "none" }} />
         <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle,rgba(109,40,217,.06) 0%,transparent 70%)", bottom: -100, right: "10%", pointerEvents: "none" }} />
 
-        <div className="fu" style={{ maxWidth: 660, margin: "0 auto" }}>
-          <div className="bdg bdg-p" style={{ display: "inline-flex", marginBottom: 18, fontSize: 12, padding: "5px 14px" }}>
-            Powered by 0G Blockchain
-          </div>
+        <div className="fu" style={{ padding: "50px 0px 10px", maxWidth: 660, margin: "0 auto" }}>
           <h1 style={{ fontSize: "clamp(36px,5.5vw,62px)", fontWeight: 900, lineHeight: 1.05, letterSpacing: "-.03em", marginBottom: 20, color: V.text }}>
             Host your next event<br /><span className="gt">on the blockchain</span>
           </h1>

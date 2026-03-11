@@ -1,11 +1,11 @@
-import { Plus, Wallet, Ticket } from "lucide-react";
+import { Plus, Ticket } from "lucide-react";
 import { useWallet } from "../../context/WalletContext";
 import { shortAddr } from "../../utils/format";
 import { V } from "../../utils/constants";
 import { Link, useLocation } from "react-router-dom";
 
 export default function Navbar({ isMobile }) {
-  const { wallet, connect } = useWallet();
+  const { wallet, connectWeb3Auth } = useWallet();
   const location = useLocation();
 
   const navItems = [
@@ -55,6 +55,7 @@ export default function Navbar({ isMobile }) {
           style={{
             borderRadius: 12,
             padding: isMobile ? "7px 12px" : "8px 16px",
+            display: isMobile ? "none" : "flex",
             fontSize: 13,
             gap: 6,
             textDecoration: "none",
@@ -74,10 +75,10 @@ export default function Navbar({ isMobile }) {
             </span>
           </div>
         ) : (
-          <button className="bp" onClick={connect} style={{borderRadius:12,padding:"8px 16px",fontSize:13}}>
-            <Wallet size={13}/> Connect
+          <button className="bp" onClick={connectWeb3Auth} style={{borderRadius:12,padding:"8px 16px",fontSize:13}}>
           </button>
-        )}
+            )
+          }
       </div>
     </nav>
   );

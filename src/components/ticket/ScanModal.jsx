@@ -11,9 +11,25 @@ const MAX_EPOCH_AGE = 2;
 function currentEpoch() { return Math.floor(Date.now() / (QR_EPOCH_SECS * 1000)); }
 
 function parseQR(raw) {
+  // Format v2: MINTY|{v}|{tokenId}|{eventId}|{issuedAt}|{expiresAt}|{sig}
+  const parts = raw.split("|");
+  if (parts.length === 7 && parts[0] === "MINTY" && parts[1] === "2") {
+    const [, , tokenId, eventId, issuedAt, expiresAt, sig] = parts;
+    return {
+      version:   2,
+      tokenId:   Number(tokenId),
+      eventId:   Number(eventId),
+      issuedAt:  Number(issuedAt),
+      expiresAt: Number(expiresAt),
+      sig,
+    };
+  }
+  // Fallback: v1 format MINTY-{tokenId}-{eventId}-{epoch}
   const m = raw.match(/^MINTY-(\d+)-(\d+)-(\d+)$/);
-  if (!m) return null;
-  return { tokenId: Number(m[1]), eventId: Number(m[2]), epoch: Number(m[3]) };
+  if (m) {
+    return { version: 1, tokenId: Number(m[1]), eventId: Number(m[2]), epoch: Number(m[3]) };
+  }
+  return null;
 }
 
 async function verifyAndCheckIn(tokenId, eventId) {
@@ -90,7 +106,7 @@ export default function ScanModal({ events = [], onClose }) {
 
     const { tokenId, eventId, epoch } = parsed;
     const now = currentEpoch();
-    if (epoch < now - MAX_EPOCH_AGE) {
+  if (parsed.epoch < now - MAX_EPOCH_AGE) {
       setResultErr(`QR expired (epoch ${epoch}, now ${now}). Ask attendee to re-reveal.`);
       setResult({ ok: false });
       setScanState("done");

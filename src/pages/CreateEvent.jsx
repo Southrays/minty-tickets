@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Upload, Shield, CheckCircle, RefreshCw, AlertCircle, Mail, ExternalLink, Wallet, ChevronDown } from "lucide-react";
+// import { Upload, Shield, CheckCircle, RefreshCw, AlertCircle, Mail, ExternalLink, Wallet, ChevronDown } from "lucide-react";
+import { Shield, CheckCircle, RefreshCw, AlertCircle, Mail, ExternalLink, Wallet, ChevronDown } from "lucide-react";
 import { V, OG_TO_USD_RATE, CATEGORIES } from "../utils/constants";
 import { useWallet } from "../context/WalletContext";
 import { createEventOnChain } from "../utils/contract";
@@ -43,29 +44,14 @@ export default function CreateEventPage({ onCreated }) {
   });
   const isFree = !form.ticketPrice || form.ticketPrice==="0";
 
-  const upload = e => {
-    const f=e.target.files[0]; setE(p=>({...p,image:""}));
-    if(!f) return;
-    if(f.size>5*1024*1024){setE(p=>({...p,image:"Image must be under 5MB."}));return;}
-    const r=new FileReader();
-    r.onload=ev=>{set("imagePreview",ev.target.result);set("imageFile",f);};
-    r.readAsDataURL(f);
-  };
-
-  async function uploadImageTo0G(file) {
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await fetch("/api/upload", {
-    method: "POST",
-    body: formData
-  });
-
-  const data = await res.json();
-
-  return data.uri;
-}
+  // const upload = e => {
+  //   const f=e.target.files[0]; setE(p=>({...p,image:""}));
+  //   if(!f) return;
+  //   if(f.size>5*1024*1024){setE(p=>({...p,image:"Image must be under 5MB."}));return;}
+  //   const r=new FileReader();
+  //   r.onload=ev=>{set("imagePreview",ev.target.result);set("imageFile",f);};
+  //   r.readAsDataURL(f);
+  // };
 
   const validate = () => {
     const e={};
@@ -76,36 +62,22 @@ export default function CreateEventPage({ onCreated }) {
     if(!form.startDate)                e.startDate="Start date is required.";
     if(!form.endDate)                  e.endDate="End date is required.";
     if(!form.maxTickets||parseInt(form.maxTickets)<1) e.maxTickets="Enter max ticket supply (at least 1).";
-    if(!form.imageFile&&!form.imagePreview) e.image="Event image is required.";
     setE(e); return Object.keys(e).length===0;
   };
 
   const submit = async () => {
     if(!validate()) return;
-
     setBusy(true);
     setTxErr("");
-
     try {
-
-      // upload image
-      const imageURI = await uploadImageTo0G(form.imageFile);
-
-      const eventData = {
-        ...form,
-        imageURI
-      };
-
-      const {txHash,eventId} = await createEventOnChain(eventData);
-
-      const shareUrl =
-        window.location.origin +
-        window.location.pathname +
-        "#/event/" +
-        eventId;
-
-      setDone({txHash,eventId,shareUrl});
-
+      // Image upload to storage is not yet configured.
+      // imageURI is passed as an empty string for now — the event will
+      // show its category gradient/emoji instead of a photo until
+      // 0G Storage integration is wired up.
+      const {txHash, eventId} = await createEventOnChain({ ...form, imageURI: "" });
+      const shareUrl = `${window.location.origin}/event/${eventId}`;
+      setDone({txHash, eventId, shareUrl});
+      if(onCreated) await onCreated();
     } catch(err) {
       console.error(err);
       setTxErr(err?.reason || err?.message || "Transaction failed.");
@@ -213,9 +185,13 @@ export default function CreateEventPage({ onCreated }) {
         </div>
 
         {/* EVENT IMAGE */}
-        <div style={{marginBottom:28}}>
-          <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:13,color:V.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:16,paddingBottom:10,borderBottom:"1px solid "+V.borderS}}>
-            Event Image <span style={{color:"#EF4444"}}>*</span>
+        {/* <div style={{marginBottom:28}}>
+          <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:13,color:V.muted,textTransform:"uppercase",letterSpacing:".08em",marginBottom:6,paddingBottom:10,borderBottom:"1px solid "+V.borderS}}>
+            Event Image <span style={{fontFamily:"DM Sans",fontSize:11,textTransform:"none",fontWeight:400,color:V.mutedL,letterSpacing:0}}>(optional — preview only for now)</span>
+          </div>
+          <div style={{background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:10,padding:"9px 13px",marginBottom:12,display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#92400E"}}>
+            <AlertCircle size={13} style={{flexShrink:0}}/>
+            Image preview works but won't be stored on-chain yet. Your event will show its category colour until storage is connected.
           </div>
           <label htmlFor="imgup" style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,height:form.imagePreview?200:130,border:"2px dashed "+(errs.image?"#FCA5A5":form.imagePreview?"#A3E635":V.border),borderRadius:16,cursor:"pointer",background:form.imagePreview?"#000":V.surface,transition:"all .2s",overflow:"hidden",position:"relative"}}
             onMouseEnter={e=>{if(!form.imagePreview)e.currentTarget.style.borderColor=V.brand;}}
@@ -229,13 +205,13 @@ export default function CreateEventPage({ onCreated }) {
               <>
                 <Upload size={22} color={errs.image?"#EF4444":V.mutedL}/>
                 <div style={{fontFamily:"Outfit",fontWeight:600,fontSize:14,color:errs.image?"#EF4444":V.muted}}>Upload event image</div>
-                <div style={{fontSize:12,color:V.mutedL}}>PNG, JPG, GIF · max 5 MB</div>
+                <div style={{fontSize:12,color:V.mutedL}}>PNG, JPG, GIF · max 5 MB · preview only</div>
               </>
             )}
           </label>
           <input id="imgup" type="file" accept="image/*" style={{display:"none"}} onChange={upload}/>
           <Err msg={errs.image}/>
-        </div>
+        </div> */}
 
         {/* LOCATION */}
         <div style={{marginBottom:28}}>
