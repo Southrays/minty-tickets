@@ -8,7 +8,6 @@ import { V } from "../utils/constants";
 import { formatDate, formatTime, soldPct } from "../utils/format";
 import { useWallet } from "../context/WalletContext";
 import { useApp } from "../context/AppContext";
-import { buyTicketOnChain, fetchEvent } from "../utils/contract";
 import { useNavigate, useParams } from "react-router-dom";
 
 // ─── Email / Wallet choice modal ────────────────────────────────────────────
@@ -434,7 +433,6 @@ export default function EventDetailsPage({ onTicketBought }) {
   ) ?? null;
 
   const free    = !event.ticketPrice || event.ticketPrice === "0";
-  const soldOut = event.soldTickets >= event.maxTickets;
   const loc     = [event.venue, event.city, event.state, event.country].filter(Boolean).join(", ");
   const shareUrl = `${window.location.origin}/event/${event.id}`;
   const copy = () => navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
