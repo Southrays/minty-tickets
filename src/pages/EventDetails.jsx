@@ -8,11 +8,11 @@ import { V } from "../utils/constants";
 import { formatDate, formatTime, soldPct } from "../utils/format";
 import { useWallet } from "../context/WalletContext";
 import { useApp } from "../context/AppContext";
-// import { buyTicketOnChain, fetchEvent } from "../utils/contract";
+import { buyTicketOnChain, fetchEvent } from "../utils/contract";
 import { useNavigate, useParams } from "react-router-dom";
 
 // ─── Email / Wallet choice modal ────────────────────────────────────────────
-function TicketMethodModal({ event, onWallet, onClose }) {
+function TicketMethodModal({ event, onWallet, onClose, onEmailSent }) {
   const [step,     setStep]     = useState("choose");
   const [email,    setEmail]    = useState("");
   const [name,     setName]     = useState("");
@@ -46,6 +46,7 @@ function TicketMethodModal({ event, onWallet, onClose }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send ticket.");
       setSent(true);
+      if (onEmailSent) onEmailSent(); // notify parent to update ticket count
     } catch (err) {
       setEmailErr(err.message || "Failed to send. Please try again.");
     } finally { setSending(false); }
@@ -64,7 +65,7 @@ function TicketMethodModal({ event, onWallet, onClose }) {
           <div>
             <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:"rgba(255,255,255,.6)",
               letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-              {!event.ticketPrice || event.acceptsOffchainTickets ? "Free Event" : "Paid Event"}
+              {event.ticketPrice && event.ticketPrice !== "0" ? "Paid Event" : "Free Event"}
             </div>
             <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:17,color:"white",
               lineHeight:1.2,maxWidth:270}}>{event.name}</div>
@@ -162,7 +163,7 @@ function TicketMethodModal({ event, onWallet, onClose }) {
                 {sending ? <><RefreshCw size={14} className="spin"/>Sending ticket…</> : <><Mail size={14}/>Send My Ticket</>}
               </button>
               <p style={{textAlign:"center",fontSize:11,color:V.mutedL,marginTop:10,lineHeight:1.5}}>
-                You'll receive a QR code confirmation email within seconds.
+                You'll receive a confirmation email within seconds.
               </p>
             </>
           )}
@@ -176,7 +177,7 @@ function TicketMethodModal({ event, onWallet, onClose }) {
               </div>
               <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:17,color:V.text,marginBottom:6}}>Ticket Sent!</div>
               <p style={{fontSize:13,color:V.muted,lineHeight:1.65,marginBottom:20}}>
-                Check <strong>{email}</strong> for your confirmation and entry QR code.
+                Check <strong>{email}</strong> — your ticket confirmation is on its way.
               </p>
               <button className="bp" onClick={onClose}
                 style={{width:"100%",justifyContent:"center",padding:12}}>Done</button>
@@ -225,12 +226,12 @@ function AlreadyHasBanner({ ticket, navigate }) {
 }
 
 // ─── Purchase card ───────────────────────────────────────────────────────────
-function PurchaseCard({ event, wallet, connect, connecting, buying, bought, txErr,
+function PurchaseCard({ event, totalSold, wallet, connect, connecting, buying, bought, txErr,
   onClaim, onShowModal, navigate, existingTicket }) {
 
   const free    = !event.ticketPrice || event.ticketPrice === "0";
-  const soldOut = event.soldTickets >= event.maxTickets;
-  const pct     = soldPct(event.soldTickets, event.maxTickets);
+  const soldOut = totalSold >= event.maxTickets;
+  const pct     = soldPct(totalSold, event.maxTickets);
 
   return (
     <div style={{background:"white",borderRadius:20,
@@ -268,10 +269,10 @@ function PurchaseCard({ event, wallet, connect, connecting, buying, bought, txEr
         {/* Availability */}
         <div style={{marginBottom:20}}>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:7}}>
-            <span style={{fontFamily:"Outfit",fontWeight:600,color:V.muted}}>{event.soldTickets.toLocaleString()} sold</span>
+            <span style={{fontFamily:"Outfit",fontWeight:600,color:V.muted}}>{totalSold.toLocaleString()} sold</span>
             <span style={{fontFamily:"Outfit",fontWeight:600,
               color:soldOut?"#EF4444":pct>80?"#F59E0B":V.brand}}>
-              {soldOut ? "Sold out" : `${(event.maxTickets - event.soldTickets).toLocaleString()} left`}
+              {soldOut ? "Sold out" : `${(event.maxTickets - totalSold).toLocaleString()} left`}
             </span>
           </div>
           <div style={{height:6,borderRadius:99,background:V.borderS,overflow:"hidden"}}>
@@ -374,13 +375,14 @@ function PurchaseCard({ event, wallet, connect, connecting, buying, bought, txEr
 export default function EventDetailsPage({ onTicketBought }) {
   const { wallet, connect, connecting, requireWallet } = useWallet();
   const { tickets } = useApp();
-  const [event,     setEvent]     = useState(null);
-  const [buying,    setBuying]    = useState(false);
-  const [bought,    setBought]    = useState(false);
-  const [txErr,     setTxErr]     = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [copied,    setCopied]    = useState(false);
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+  const [event,          setEvent]          = useState(null);
+  const [buying,         setBuying]         = useState(false);
+  const [bought,         setBought]         = useState(false);
+  const [txErr,          setTxErr]          = useState("");
+  const [showModal,      setShowModal]      = useState(false);
+  const [copied,         setCopied]         = useState(false);
+  const [isDesktop,      setIsDesktop]      = useState(window.innerWidth >= 768);
+  const [emailTicketCount, setEmailTicketCount] = useState(0);
   const heroRef = useRef(null);
   const navigate    = useNavigate();
   const { eventId } = useParams();
@@ -396,6 +398,15 @@ export default function EventDetailsPage({ onTicketBought }) {
     import("../utils/contract").then(m => m.fetchEvent(eventId))
       .then(e => setEvent(e))
       .catch(err => console.error("Failed to fetch event:", err));
+  }, [eventId]);
+
+  // Fetch email ticket count for events that accept offchain tickets
+  useEffect(() => {
+    if (!eventId) return;
+    fetch(`/api/ticket-count?eventId=${eventId}`)
+      .then(r => r.json())
+      .then(d => setEmailTicketCount(d.emailCount || 0))
+      .catch(() => {}); // fail silently — bar just shows on-chain count
   }, [eventId]);
 
   // Parallax
@@ -423,7 +434,7 @@ export default function EventDetailsPage({ onTicketBought }) {
   ) ?? null;
 
   const free    = !event.ticketPrice || event.ticketPrice === "0";
-  // const soldOut = event.soldTickets >= event.maxTickets;
+  const soldOut = event.soldTickets >= event.maxTickets;
   const loc     = [event.venue, event.city, event.state, event.country].filter(Boolean).join(", ");
   const shareUrl = `${window.location.origin}/event/${event.id}`;
   const copy = () => navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
@@ -456,7 +467,9 @@ export default function EventDetailsPage({ onTicketBought }) {
   };
 
   const purchaseCardProps = {
-    event, wallet, connect, connecting, buying, bought, txErr,
+    event,
+    totalSold: event.soldTickets + emailTicketCount, // on-chain NFTs + email tickets
+    wallet, connect, connecting, buying, bought, txErr,
     onClaim: handleClaim,
     onShowModal: () => setShowModal(true),
     navigate,
@@ -473,7 +486,12 @@ export default function EventDetailsPage({ onTicketBought }) {
   return (
     <div style={{paddingTop:62,minHeight:"100vh",background:"#F8F7FF"}}>
       {showModal && (
-        <TicketMethodModal event={event} onWallet={mintTicket} onClose={() => setShowModal(false)}/>
+        <TicketMethodModal
+          event={event}
+          onWallet={mintTicket}
+          onClose={() => setShowModal(false)}
+          onEmailSent={() => setEmailTicketCount(c => c + 1)}
+        />
       )}
 
       {/* ── Hero ── */}

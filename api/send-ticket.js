@@ -1,7 +1,18 @@
 // api/send-ticket.js — Vercel serverless function (CommonJS)
-// Only dependency: npm install resend
+// Dependencies: npm install resend @upstash/redis
 
 const { Resend } = require("resend");
+const { Redis }  = require("@upstash/redis");
+
+// Redis is only available when env vars are set (always true on Vercel,
+// true locally if you copied them from the Upstash dashboard into .env.local)
+function getRedis() {
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return null;
+  return new Redis({
+    url:   process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+  });
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -17,8 +28,7 @@ module.exports = async function handler(req, res) {
 
   let body = req.body;
   if (typeof body === "string") {
-    try { body = JSON.parse(body); }
-    catch { return res.status(400).json({ error: "Invalid JSON body." }); }
+    try { body = JSON.parse(body); } catch { return res.status(400).json({ error: "Invalid JSON body." }); }
   }
 
   const { name, email, eventId, eventName, eventDate, eventLocation } = body || {};
@@ -27,6 +37,17 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "A valid email address is required." });
   if (!eventId || !eventName)
     return res.status(400).json({ error: "Event ID and name are required." });
+
+  // ── Deduplication ─────────────────────────────────────────────────────────
+  const redis    = getRedis();
+  const dedupKey = `ticket:used:${eventId}:${email.toLowerCase().trim()}`;
+
+  if (redis) {
+    const alreadyUsed = await redis.get(dedupKey);
+    if (alreadyUsed) {
+      return res.status(409).json({ error: "This email already has a ticket for this event." });
+    }
+  }
 
   const displayName = (name || "").trim() || "there";
 
@@ -37,173 +58,114 @@ module.exports = async function handler(req, res) {
 
   const rowsHtml = detailRows.map(({ icon, label, value }) => `
     <tr>
-      <td style="padding:12px 16px;border-bottom:1px solid #F3F4F6;font-size:15px;
-                 vertical-align:middle;width:32px;">${icon}</td>
-      <td style="padding:12px 8px 12px 0;border-bottom:1px solid #F3F4F6;
-                 font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
-                 letter-spacing:.07em;vertical-align:middle;white-space:nowrap;">${label}</td>
-      <td style="padding:12px 20px 12px 12px;border-bottom:1px solid #F3F4F6;
-                 font-size:14px;font-weight:600;color:#111827;vertical-align:middle;">
-        ${value}
-      </td>
+      <td style="padding:12px 16px;border-bottom:1px solid #F3F4F6;font-size:15px;vertical-align:middle;width:32px;">${icon}</td>
+      <td style="padding:12px 8px 12px 0;border-bottom:1px solid #F3F4F6;font-size:11px;font-weight:700;
+                 color:#9CA3AF;text-transform:uppercase;letter-spacing:.07em;vertical-align:middle;white-space:nowrap;">${label}</td>
+      <td style="padding:12px 20px 12px 12px;border-bottom:1px solid #F3F4F6;font-size:14px;
+                 font-weight:600;color:#111827;vertical-align:middle;">${value}</td>
     </tr>`).join("");
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>You're going to ${eventName}!</title>
-</head>
-<body style="margin:0;padding:0;background:#EEF2FF;
-             font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>You're going to ${eventName}!</title></head>
+<body style="margin:0;padding:0;background:#EEF2FF;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#EEF2FF;padding:40px 16px 52px;">
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
-
-        <!-- Wordmark -->
-        <tr>
-          <td align="center" style="padding-bottom:22px;">
-            <p style="margin:0;font-size:13px;font-weight:700;color:#7C3AED;
-                      letter-spacing:.1em;text-transform:uppercase;">🎫 Minty Tickets</p>
-          </td>
-        </tr>
-
-        <!-- Card -->
-        <tr>
-          <td style="background:#FFFFFF;border-radius:24px;overflow:hidden;
-                     box-shadow:0 8px 40px rgba(109,40,217,.14);">
-
-            <!-- Hero -->
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="background:linear-gradient(145deg,#7C3AED 0%,#4C1D95 100%);
-                           padding:44px 32px 40px;text-align:center;">
-                  <p style="margin:0 0 16px;font-size:48px;line-height:1;">🎉</p>
-                  <h1 style="margin:0 0 10px;color:#FFFFFF;font-size:28px;font-weight:800;
-                             letter-spacing:-.4px;line-height:1.15;">
-                    You're going!
-                  </h1>
-                  <p style="margin:0;color:rgba(255,255,255,.8);font-size:15px;line-height:1.6;">
-                    Your spot at <strong style="color:#FFFFFF;">${eventName}</strong><br/>
-                    has been confirmed.
+        <tr><td align="center" style="padding-bottom:22px;">
+          <p style="margin:0;font-size:13px;font-weight:700;color:#7C3AED;letter-spacing:.1em;text-transform:uppercase;">🎫 Minty Tickets</p>
+        </td></tr>
+        <tr><td style="background:#FFFFFF;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(109,40,217,.14);">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:linear-gradient(145deg,#7C3AED 0%,#4C1D95 100%);padding:44px 32px 40px;text-align:center;">
+              <p style="margin:0 0 16px;font-size:48px;line-height:1;">🎉</p>
+              <h1 style="margin:0 0 10px;color:#FFFFFF;font-size:28px;font-weight:800;letter-spacing:-.4px;">You're going!</h1>
+              <p style="margin:0;color:rgba(255,255,255,.8);font-size:15px;line-height:1.6;">
+                Your spot at <strong style="color:#FFFFFF;">${eventName}</strong><br/>has been confirmed.
+              </p>
+            </td></tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#EEF2FF;width:20px;border-radius:0 0 50% 0;height:18px;"></td>
+              <td style="border-top:2px dashed #E5E7EB;"></td>
+              <td style="background:#EEF2FF;width:20px;border-radius:0 0 0 50%;height:18px;"></td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:30px 32px 0;">
+              <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">Hi ${displayName} 👋</p>
+              <p style="margin:0;font-size:14px;color:#6B7280;line-height:1.75;">Great news — your ticket is all set. We can't wait to see you there!</p>
+            </td></tr>
+          </table>
+          ${detailRows.length > 0 ? `
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:22px 32px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0"
+                style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden;">
+                ${rowsHtml}
+              </table>
+            </td></tr>
+          </table>` : ""}
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:22px 32px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:14px;">
+                <tr><td style="padding:18px 20px;">
+                  <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.07em;">✅ You're all set</p>
+                  <p style="margin:0;font-size:13px;color:#15803D;line-height:1.7;">Simply show this email at the entrance and the organiser will check you in.</p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:20px 32px 36px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:14px;">
+                <tr><td style="padding:16px 20px;">
+                  <p style="margin:0;font-size:12px;color:#9A3412;line-height:1.7;">
+                    🔒 <strong>This ticket is personal and non-transferable.</strong> Valid for one entry only.
                   </p>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Dashed tear line -->
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="background:#EEF2FF;width:20px;border-radius:0 0 50% 0;height:18px;"></td>
-                <td style="border-top:2px dashed #E5E7EB;"></td>
-                <td style="background:#EEF2FF;width:20px;border-radius:0 0 0 50%;height:18px;"></td>
-              </tr>
-            </table>
-
-            <!-- Body -->
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding:30px 32px 0;">
-                  <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">
-                    Hi ${displayName} 👋
-                  </p>
-                  <p style="margin:0;font-size:14px;color:#6B7280;line-height:1.75;">
-                    Great news — your ticket is all set. We can't wait to see you there!
-                  </p>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Event detail rows (only if date/location exist) -->
-            ${detailRows.length > 0 ? `
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding:22px 32px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0"
-                    style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden;">
-                    ${rowsHtml}
-                  </table>
-                </td>
-              </tr>
-            </table>` : ""}
-
-            <!-- What to bring box -->
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding:22px 32px 0;">
-                  <table width="100%" cellpadding="0" cellspacing="0"
-                    style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:14px;">
-                    <tr>
-                      <td style="padding:18px 20px;">
-                        <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#166534;
-                                  text-transform:uppercase;letter-spacing:.07em;">
-                          ✅ You're all set
-                        </p>
-                        <p style="margin:0;font-size:13px;color:#15803D;line-height:1.7;">
-                          Simply show this email at the entrance and the organiser
-                          will check you in. No printing needed.
-                        </p>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Reminder -->
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding:20px 32px 36px;">
-                  <table width="100%" cellpadding="0" cellspacing="0"
-                    style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:14px;">
-                    <tr>
-                      <td style="padding:16px 20px;">
-                        <p style="margin:0;font-size:12px;color:#9A3412;line-height:1.7;">
-                          🔒 <strong>This ticket is personal.</strong>
-                          It is registered in your name and valid for one entry only.
-                        </p>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-
-          </td>
-        </tr>
-
-        <!-- Footer -->
-        <tr>
-          <td style="padding:26px 0 0;text-align:center;">
-            <p style="margin:0 0 4px;font-size:12px;color:#9CA3AF;">
-              Sent by <strong style="color:#7C3AED;">Minty Tickets</strong>
-            </p>
-            <p style="margin:0;font-size:11px;color:#C4B5FD;">
-              On-chain event ticketing · 0G blockchain
-            </p>
-          </td>
-        </tr>
-
+                </td></tr>
+              </table>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:26px 0 0;text-align:center;">
+          <p style="margin:0 0 4px;font-size:12px;color:#9CA3AF;">Sent by <strong style="color:#7C3AED;">Minty Tickets</strong></p>
+          <p style="margin:0;font-size:11px;color:#C4B5FD;">On-chain event ticketing · 0G blockchain</p>
+        </td></tr>
       </table>
     </td></tr>
   </table>
+</body></html>`;
 
-</body>
-</html>`;
-
+  // ── Send email ─────────────────────────────────────────────────────────────
   const resend = new Resend(apiKey);
   try {
     await resend.emails.send({
-      from:    fromEmail,
-      to:      email,
+      from: fromEmail, to: email,
       subject: `🎉 You're going to ${eventName}!`,
       html,
     });
-    return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("Resend error:", err);
     return res.status(500).json({ error: err?.message || "Failed to send email." });
   }
+
+  // ── Persist to Redis AFTER successful send ────────────────────────────────
+  if (redis) {
+    try {
+      await Promise.all([
+        redis.set(dedupKey, "1"),
+        redis.incr(`ticket:emailcount:${eventId}`),
+      ]);
+      console.log(`[redis] Stored ticket for ${email}, event ${eventId}`);
+    } catch (err) {
+      console.error("[redis] Write error (non-fatal):", err);
+    }
+  } else {
+    console.warn("[redis] Not configured — dedup and count not persisted");
+  }
+
+  return res.status(200).json({ ok: true });
 };
