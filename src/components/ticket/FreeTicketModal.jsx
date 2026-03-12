@@ -12,7 +12,7 @@ export default function FreeTicketModal({ event, onClose }) {
       <div className="mdg card" style={{width:"100%",maxWidth:400,padding:36,textAlign:"center"}}>
         <div style={{fontSize:48,marginBottom:16}}>✉️</div>
         <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:22,color:V.text,marginBottom:8}}>Ticket sent!</div>
-        <div style={{fontSize:14,color:V.muted,lineHeight:1.7,marginBottom:24}}>Your confirmation was sent to <strong>{email}</strong>. Show it at the venue entrance.</div>
+        <div style={{fontSize:14,color:V.muted,lineHeight:1.7,marginBottom:24}}>Your confirmation was sent to <strong>{email}</strong>.</div>
         <button className="bp" onClick={onClose} style={{width:"100%",justifyContent:"center",padding:13}}>Done</button>
       </div>
     </div>

@@ -1,163 +1,187 @@
-// api/send-ticket.js  —  Vercel serverless function
-// Deps: npm install resend qrcode
-//
-// Required env vars (set in Vercel dashboard or .env.local):
-//   RESEND_API_KEY   = re_xxxxxxxxxxxx
-//   FROM_EMAIL       = tickets@yourdomain.com   (must be a verified Resend sender)
+// api/send-ticket.js — Vercel serverless function (CommonJS)
+// Only dependency: npm install resend
 
-import { Resend } from "resend";
-import QRCode from "qrcode";
+const { Resend } = require("resend");
 
-export default async function handler(req, res) {
-  // ── CORS (so localhost dev works too) ──────────────────────────────────────
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST")   return res.status(405).json({ error: "Method not allowed" });
 
-  // ── Validate env ───────────────────────────────────────────────────────────
-  if (!process.env.RESEND_API_KEY) {
-    console.error("Missing RESEND_API_KEY");
-    return res.status(500).json({ error: "Email service not configured." });
-  }
-  if (!process.env.FROM_EMAIL) {
-    console.error("Missing FROM_EMAIL");
-    return res.status(500).json({ error: "Sender email not configured." });
+  const apiKey    = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.FROM_EMAIL;
+  if (!apiKey)    return res.status(500).json({ error: "RESEND_API_KEY is not set." });
+  if (!fromEmail) return res.status(500).json({ error: "FROM_EMAIL is not set." });
+
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); }
+    catch { return res.status(400).json({ error: "Invalid JSON body." }); }
   }
 
-  // ── Parse body ─────────────────────────────────────────────────────────────
-  const { name, email, eventId, eventName, eventDate, eventLocation } = req.body ?? {};
+  const { name, email, eventId, eventName, eventDate, eventLocation } = body || {};
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    return res.status(400).json({ error: "Valid email address is required." });
+    return res.status(400).json({ error: "A valid email address is required." });
   if (!eventId || !eventName)
-    return res.status(400).json({ error: "Event details are required." });
+    return res.status(400).json({ error: "Event ID and name are required." });
 
-  // ── Build unique ticket reference ──────────────────────────────────────────
-  // Format: MINTY-EMAIL|{eventId}|{issuedAt}|{ref6}
-  // The scanner can read this QR and identify it as an email ticket.
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const ref6 = Math.random().toString(36).slice(2, 8).toUpperCase();
-  const qrPayload = `MINTY-EMAIL|${eventId}|${issuedAt}|${ref6}`;
-  const ticketCode = `MT-${ref6}`;
+  const displayName = (name || "").trim() || "there";
 
-  // ── Generate QR code as base64 PNG ─────────────────────────────────────────
-  let qrDataUrl;
-  try {
-    qrDataUrl = await QRCode.toDataURL(qrPayload, {
-      width: 260,
-      margin: 2,
-      color: { dark: "#1F2937", light: "#FFFFFF" },
-      errorCorrectionLevel: "M",
-    });
-  } catch (err) {
-    console.error("QR generation failed:", err);
-    return res.status(500).json({ error: "Failed to generate QR code." });
-  }
+  const detailRows = [
+    eventDate     && { icon: "📅", label: "Date",     value: eventDate     },
+    eventLocation && { icon: "📍", label: "Location", value: eventLocation },
+  ].filter(Boolean);
 
-  // Strip the data-url prefix to get raw base64 for embedding
-  const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
+  const rowsHtml = detailRows.map(({ icon, label, value }) => `
+    <tr>
+      <td style="padding:12px 16px;border-bottom:1px solid #F3F4F6;font-size:15px;
+                 vertical-align:middle;width:32px;">${icon}</td>
+      <td style="padding:12px 8px 12px 0;border-bottom:1px solid #F3F4F6;
+                 font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
+                 letter-spacing:.07em;vertical-align:middle;white-space:nowrap;">${label}</td>
+      <td style="padding:12px 20px 12px 12px;border-bottom:1px solid #F3F4F6;
+                 font-size:14px;font-weight:600;color:#111827;vertical-align:middle;">
+        ${value}
+      </td>
+    </tr>`).join("");
 
-  // ── Build HTML email ───────────────────────────────────────────────────────
-  const displayName = name?.trim() || "Attendee";
-  const locationLine = eventLocation ? `<p style="margin:4px 0;color:#6B7280;font-size:14px;">📍 ${eventLocation}</p>` : "";
-
-  const htmlEmail = `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Your Ticket — ${eventName}</title>
+  <title>You're going to ${eventName}!</title>
 </head>
-<body style="margin:0;padding:0;background:#F3F4F6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-    style="background:#F3F4F6;padding:32px 16px;">
-    <tr><td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-        style="max-width:520px;background:#FFFFFF;border-radius:20px;
-               overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+<body style="margin:0;padding:0;background:#EEF2FF;
+             font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 
-        <!-- Purple header -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#EEF2FF;padding:40px 16px 52px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+
+        <!-- Wordmark -->
         <tr>
-          <td style="background:linear-gradient(135deg,#7C3AED,#5B21B6);padding:32px 32px 28px;text-align:center;">
-            <p style="margin:0 0 6px;font-size:28px;">🎫</p>
-            <h1 style="margin:0;color:#FFFFFF;font-size:22px;font-weight:800;letter-spacing:-.3px;">
-              You're In!
-            </h1>
-            <p style="margin:8px 0 0;color:rgba(255,255,255,.75);font-size:14px;">
-              Here's your entry ticket for <strong style="color:#FFF;">${eventName}</strong>
-            </p>
+          <td align="center" style="padding-bottom:22px;">
+            <p style="margin:0;font-size:13px;font-weight:700;color:#7C3AED;
+                      letter-spacing:.1em;text-transform:uppercase;">🎫 Minty Tickets</p>
           </td>
         </tr>
 
-        <!-- Body -->
+        <!-- Card -->
         <tr>
-          <td style="padding:28px 32px 24px;">
-            <p style="margin:0 0 4px;color:#111827;font-size:16px;font-weight:600;">
-              Hi ${displayName} 👋
-            </p>
-            <p style="margin:0 0 24px;color:#6B7280;font-size:14px;line-height:1.6;">
-              Your ticket is confirmed. Show the QR code below at the door — 
-              the scanner will verify your entry.
-            </p>
+          <td style="background:#FFFFFF;border-radius:24px;overflow:hidden;
+                     box-shadow:0 8px 40px rgba(109,40,217,.14);">
 
-            <!-- Event details box -->
-            <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-              style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;
-                     margin-bottom:24px;">
+            <!-- Hero -->
+            <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="padding:16px 20px;">
-                  <p style="margin:0 0 2px;color:#111827;font-size:16px;font-weight:700;">${eventName}</p>
-                  ${eventDate ? `<p style="margin:4px 0;color:#6B7280;font-size:14px;">📅 ${eventDate}</p>` : ""}
-                  ${locationLine}
-                  <p style="margin:8px 0 0;color:#9CA3AF;font-size:12px;font-family:monospace;">
-                    Ticket code: <strong style="color:#374151;">${ticketCode}</strong>
+                <td style="background:linear-gradient(145deg,#7C3AED 0%,#4C1D95 100%);
+                           padding:44px 32px 40px;text-align:center;">
+                  <p style="margin:0 0 16px;font-size:48px;line-height:1;">🎉</p>
+                  <h1 style="margin:0 0 10px;color:#FFFFFF;font-size:28px;font-weight:800;
+                             letter-spacing:-.4px;line-height:1.15;">
+                    You're going!
+                  </h1>
+                  <p style="margin:0;color:rgba(255,255,255,.8);font-size:15px;line-height:1.6;">
+                    Your spot at <strong style="color:#FFFFFF;">${eventName}</strong><br/>
+                    has been confirmed.
                   </p>
                 </td>
               </tr>
             </table>
 
-            <!-- QR code -->
-            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+            <!-- Dashed tear line -->
+            <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="center" style="padding-bottom:24px;">
-                  <div style="display:inline-block;padding:14px;background:#FFFFFF;
-                               border:2px solid #E5E7EB;border-radius:16px;">
-                    <img src="cid:ticket-qr"
-                         alt="Entry QR Code"
-                         width="220" height="220"
-                         style="display:block;border-radius:6px;"/>
-                  </div>
-                  <p style="margin:10px 0 0;color:#9CA3AF;font-size:12px;">
-                    Scan this code at the venue entrance
+                <td style="background:#EEF2FF;width:20px;border-radius:0 0 50% 0;height:18px;"></td>
+                <td style="border-top:2px dashed #E5E7EB;"></td>
+                <td style="background:#EEF2FF;width:20px;border-radius:0 0 0 50%;height:18px;"></td>
+              </tr>
+            </table>
+
+            <!-- Body -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:30px 32px 0;">
+                  <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#111827;">
+                    Hi ${displayName} 👋
+                  </p>
+                  <p style="margin:0;font-size:14px;color:#6B7280;line-height:1.75;">
+                    Great news — your ticket is all set. We can't wait to see you there!
                   </p>
                 </td>
               </tr>
             </table>
 
-            <!-- Notice -->
-            <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-              style="background:#EDE9FE;border-radius:10px;margin-bottom:4px;">
+            <!-- Event detail rows (only if date/location exist) -->
+            ${detailRows.length > 0 ? `
+            <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="padding:12px 16px;">
-                  <p style="margin:0;color:#5B21B6;font-size:12px;line-height:1.6;">
-                    🔒 <strong>This ticket is non-transferable.</strong> 
-                    It is valid for one person and will be marked as used upon entry.
-                  </p>
+                <td style="padding:22px 32px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden;">
+                    ${rowsHtml}
+                  </table>
+                </td>
+              </tr>
+            </table>` : ""}
+
+            <!-- What to bring box -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:22px 32px 0;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:14px;">
+                    <tr>
+                      <td style="padding:18px 20px;">
+                        <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#166534;
+                                  text-transform:uppercase;letter-spacing:.07em;">
+                          ✅ You're all set
+                        </p>
+                        <p style="margin:0;font-size:13px;color:#15803D;line-height:1.7;">
+                          Simply show this email at the entrance and the organiser
+                          will check you in. No printing needed.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
             </table>
+
+            <!-- Reminder -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:20px 32px 36px;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:14px;">
+                    <tr>
+                      <td style="padding:16px 20px;">
+                        <p style="margin:0;font-size:12px;color:#9A3412;line-height:1.7;">
+                          🔒 <strong>This ticket is personal.</strong>
+                          It is registered in your name and valid for one entry only.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
           </td>
         </tr>
 
         <!-- Footer -->
         <tr>
-          <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;
-                     padding:18px 32px;text-align:center;">
-            <p style="margin:0;color:#9CA3AF;font-size:12px;line-height:1.6;">
-              Powered by <strong style="color:#7C3AED;">Minty Tickets</strong> · 
-              On-chain event ticketing on the 0G blockchain
+          <td style="padding:26px 0 0;text-align:center;">
+            <p style="margin:0 0 4px;font-size:12px;color:#9CA3AF;">
+              Sent by <strong style="color:#7C3AED;">Minty Tickets</strong>
+            </p>
+            <p style="margin:0;font-size:11px;color:#C4B5FD;">
+              On-chain event ticketing · 0G blockchain
             </p>
           </td>
         </tr>
@@ -165,36 +189,21 @@ export default async function handler(req, res) {
       </table>
     </td></tr>
   </table>
+
 </body>
 </html>`;
 
-  // ── Send via Resend ────────────────────────────────────────────────────────
-  const resend = new Resend(process.env.RESEND_API_KEY);
-
+  const resend = new Resend(apiKey);
   try {
     await resend.emails.send({
-      from: process.env.FROM_EMAIL,
-      to: email,
-      subject: `🎫 Your ticket for ${eventName}`,
-      html: htmlEmail,
-      attachments: [
-        {
-          filename: "ticket-qr.png",
-          content: qrBase64,
-          content_type: "image/png",
-          content_id: "ticket-qr",   // matches cid:ticket-qr in the HTML
-        },
-      ],
+      from:    fromEmail,
+      to:      email,
+      subject: `🎉 You're going to ${eventName}!`,
+      html,
     });
-
-    return res.status(200).json({
-      ok: true,
-      message: "Ticket sent successfully.",
-      ticketCode,
-    });
+    return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("Resend error:", err);
-    const msg = err?.message || "Failed to send email.";
-    return res.status(500).json({ error: msg });
+    return res.status(500).json({ error: err?.message || "Failed to send email." });
   }
-}
+};

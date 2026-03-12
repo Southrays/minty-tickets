@@ -64,7 +64,7 @@ function TicketMethodModal({ event, onWallet, onClose }) {
           <div>
             <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:"rgba(255,255,255,.6)",
               letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-              {event.ticketPrice && event.ticketPrice !== "0" ? "Paid Event" : "Free Event"}
+              {!event.ticketPrice || event.acceptsOffchainTickets ? "Free Event" : "Paid Event"}
             </div>
             <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:17,color:"white",
               lineHeight:1.2,maxWidth:270}}>{event.name}</div>
