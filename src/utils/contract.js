@@ -284,3 +284,23 @@ export async function withdrawOrganizerFunds() {
   const r  = await tx.wait();
   return r.hash;
 }
+
+// ─── Fetch organizer's pending withdrawal balance ─────────────────────────
+// Tries common contract patterns — returns 0 if not available
+export async function getOrganizerBalance(organizerAddr) {
+  try {
+    const c = await getReadContract();
+    // Try the most common pattern first
+    const bal = await c["pendingWithdrawals(address)"](organizerAddr);
+    return ethers.formatEther(bal);
+  } catch {
+    try {
+      const c = await getReadContract();
+      const bal = await c["organizerBalances(address)"](organizerAddr);
+      return ethers.formatEther(bal);
+    } catch {
+      // If neither exists on this contract, return null so UI can hide it
+      return null;
+    }
+  }
+}

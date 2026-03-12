@@ -20,9 +20,9 @@ body{background:#fff;}
 .mw{font-family:'DM Sans',sans-serif;background:#fff;min-height:100vh;color:var(--text);overflow-x:hidden;}
 h1,h2,h3,h4,h5,h6{font-family:'Outfit',sans-serif;color:var(--text);}
 
-::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar{width:7px;}
 ::-webkit-scrollbar-track{background:var(--surface);}
-::-webkit-scrollbar-thumb{background:var(--b100);border-radius:4px;}
+::-webkit-scrollbar-thumb{background:#DDD6FE;border-radius:4px;}
 
 .gt{background:linear-gradient(135deg,var(--brand) 0%,#A855F7 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 

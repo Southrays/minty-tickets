@@ -44,14 +44,77 @@ export default function CreateEventPage({ onCreated }) {
   });
   const isFree = !form.ticketPrice || form.ticketPrice === "0";
 
-  // ── Image pick (local preview only — upload happens on submit) ────────────
+  // ── Image pick — compress to ≤2 MB using canvas if needed ───────────────
   const pickImage = e => {
     const f = e.target.files[0];
     setUploadErr("");
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) { setUploadErr("Image must be under 5 MB."); return; }
+    if (!f.type.startsWith("image/")) { setUploadErr("Please select an image file."); return; }
+
+    const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+
     const reader = new FileReader();
-    reader.onload = ev => { set("imagePreview", ev.target.result); set("imageFile", f); };
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;
+
+      // Under 2MB → use directly, no compression needed
+      if (f.size <= MAX_BYTES) {
+        set("imagePreview", dataUrl);
+        set("imageFile", f);
+        return;
+      }
+
+      // Over 2MB → compress via canvas
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        // Keep aspect ratio, cap longest side at 1920px
+        const MAX_DIM = 1920;
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+          else                 { width  = Math.round(width  * MAX_DIM / height); height = MAX_DIM; }
+        }
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+
+        // Binary-search for the highest quality that fits in 2MB
+        let lo = 0.1, hi = 0.92, bestDataUrl = null, bestBlob = null;
+        const tryQuality = (q, cb) => {
+          canvas.toBlob(blob => {
+            if (!blob) { cb(false); return; }
+            const reader2 = new FileReader();
+            reader2.onload = e2 => cb(e2.target.result, blob);
+            reader2.readAsDataURL(blob);
+          }, "image/jpeg", q);
+        };
+
+        // 4 iterations of binary search
+        let iter = 0;
+        const step = () => {
+          if (iter >= 4) {
+            if (bestDataUrl) {
+              set("imagePreview", bestDataUrl);
+              set("imageFile",    new File([bestBlob], f.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+            } else {
+              setUploadErr("Could not compress image under 2 MB. Try a different image.");
+            }
+            return;
+          }
+          iter++;
+          const mid = (lo + hi) / 2;
+          tryQuality(mid, (dataUrlResult, blob) => {
+            if (!dataUrlResult) { hi = mid; step(); return; }
+            if (blob.size <= MAX_BYTES) { bestDataUrl = dataUrlResult; bestBlob = blob; lo = mid; }
+            else                        { hi = mid; }
+            step();
+          });
+        };
+        step();
+      };
+      img.src = dataUrl;
+    };
     reader.readAsDataURL(f);
   };
 
@@ -272,7 +335,7 @@ export default function CreateEventPage({ onCreated }) {
               <Upload size={22} color={uploadErr ? "#EF4444" : V.mutedL}/>
               <div style={{fontFamily:"Outfit",fontWeight:600,fontSize:14,
                 color:uploadErr ? "#EF4444" : V.muted}}>Upload event image</div>
-              <div style={{fontSize:12,color:V.mutedL}}>PNG, JPG, GIF · max 5 MB</div>
+              <div style={{fontSize:12,color:V.mutedL}}>PNG, JPG, GIF · auto-compressed to 2 MB</div>
             </label>
           )}
           <input id="imgup" type="file" accept="image/*" style={{display:"none"}} onChange={pickImage}/>
