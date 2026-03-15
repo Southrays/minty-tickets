@@ -155,9 +155,19 @@ module.exports = async function handler(req, res) {
   // ── Persist to Redis AFTER successful send ────────────────────────────────
   if (redis) {
     try {
+      const regKey  = `reg:${eventId}:${email.toLowerCase().trim()}`;
+      const regData = JSON.stringify({
+        identifier:  email.toLowerCase().trim(),
+        ticketType:  body?.ticketType || "Regular",
+        name:        (name||"").trim() || undefined,
+        checkedIn:   false,
+        submittedAt: Date.now(),
+      });
       await Promise.all([
         redis.set(dedupKey, "1"),
         redis.incr(`ticket:emailcount:${eventId}`),
+        redis.set(regKey, regData),
+        redis.sadd(`reglist:${eventId}`, email.toLowerCase().trim()),
       ]);
       console.log(`[redis] Stored ticket for ${email}, event ${eventId}`);
     } catch (err) {

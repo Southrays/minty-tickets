@@ -30,7 +30,7 @@ function DisconnectModal({ wallet, onConfirm, onCancel }) {
             </div>
             <div>
               <div style={{fontFamily:"Outfit",fontWeight:700,fontSize:16,color:V.text}}>Wallet Connected</div>
-              <div style={{fontSize:12,fontFamily:"monospace",color:V.muted,marginTop:1}}>{wallet}</div>
+              <div style={{fontSize:12,fontFamily:"monospace",color:V.muted,marginTop:1}}>{shortAddr(wallet)}</div>
             </div>
           </div>
           <button
@@ -129,7 +129,10 @@ export default function Navbar({ isMobile }) {
         backdropFilter:"blur(16px)",
         borderBottom:"1px solid var(--border-s)",
         padding:"0 24px",height:62,
-        display:"flex",alignItems:"center",justifyContent:"space-between",
+        display: isMobile ? "flex" : "grid",
+        gridTemplateColumns: isMobile ? undefined : "1fr auto 1fr",
+        alignItems:"center",
+        justifyContent: isMobile ? "space-between" : undefined,
       }}>
 
         {/* Logo */}
@@ -159,7 +162,7 @@ export default function Navbar({ isMobile }) {
         )}
 
         {/* Right side */}
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,justifySelf:"end"}}>
 
           {/* Host Event — hidden on mobile */}
           {!isMobile && (

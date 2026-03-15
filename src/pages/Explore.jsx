@@ -14,8 +14,15 @@ export default function ExplorePage({ setSelectedEvent }) {
   const [cat,     setCat]     = useState("All");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const h = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
 
   const refreshSafe = async () => {
     if (loading) return;
@@ -63,9 +70,21 @@ export default function ExplorePage({ setSelectedEvent }) {
       </div>
 
       {/* Search panel */}
-      <div className="fu2 card" style={{ padding:22, marginBottom:26 }}>
-        {/* Category pills */}
-        <div style={{ display:"flex", gap:7, overflowX:"auto", paddingBottom:3, marginBottom:16 }}>
+      <div className="fu2 card" style={{
+        padding: isMobile ? "14px 0" : 22,
+        marginBottom:26,
+        boxShadow: isMobile ? "none" : undefined,
+        border: isMobile ? "none" : undefined,
+        background: isMobile ? "transparent" : undefined,
+        borderRadius: isMobile ? 0 : undefined,
+      }}>
+        {/* Category pills — scrollbar hidden on mobile */}
+        <style>{`
+          .explore-cats { display:flex; gap:7px; overflow-x:auto; padding-bottom:3px; margin-bottom:16px; }
+          .explore-cats::-webkit-scrollbar { display:none; }
+          .explore-cats { -ms-overflow-style:none; scrollbar-width:none; }
+        `}</style>
+        <div className="explore-cats">
           {CATEGORIES.map(c => (
             <button key={c} className={`cp${cat===c?" act":""}`}
               onClick={() => setCat(c)} style={{ fontSize:12, padding:"6px 14px", flexShrink:0 }}>{c}</button>

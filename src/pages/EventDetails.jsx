@@ -17,7 +17,6 @@ function calendarDays(startTs, endTs) {
   return Math.round((e - s) / 86400000) + 1;
 }
 
-
 // ── Guest data form step ──────────────────────────────────────────────────────
 function GuestDataForm({ event, identifier, onSubmit, onBack }) {
   const rf = event.requiredFields || {};
@@ -654,14 +653,14 @@ export default function EventDetailsPage({ onTicketBought }) {
     setBuying(true); setTxErr("");
     try {
       const { buyTicketOnChain } = await import("../utils/contract");
-      // Submit guest data if present
-      if (guestData && Object.keys(guestData).length > 0 && wallet) {
+      // Always register the wallet buyer so they appear in the dashboard guests tab
+      if (wallet) {
         await fetch("/api/submit-registration", {
           method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({
             eventId: String(event.id),
             identifier: wallet.toLowerCase(),
-            fields: { ...guestData, ticketType: ticketType||"Regular" },
+            fields: { ...(guestData||{}), ticketType: ticketType||"Regular" },
           }),
         }).catch(()=>{});
       }
@@ -921,25 +920,18 @@ export default function EventDetailsPage({ onTicketBought }) {
                       textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Ticket Types</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
                       {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
-                        const isVIP     = tt.name === "VIP";
-                        const isSponsor = tt.name === "Sponsor";
                         const isFreeT   = !tt.price || tt.price === "0";
-                        const grad = isVIP
-                          ? "linear-gradient(135deg,#D97706,#92400E)"
-                          : isSponsor
-                          ? "linear-gradient(135deg,#7C3AED,#2563EB)"
-                          : "linear-gradient(135deg,#059669,#047857)";
                         return (
-                          <div key={tt.name} style={{borderRadius:14,overflow:"hidden",
-                            boxShadow:"0 2px 10px rgba(0,0,0,.08)"}}>
-                            <div style={{background:grad,padding:"12px 14px 10px"}}>
-                              <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:14,color:"white"}}>
+                          <div key={tt.name} style={{borderRadius:12,overflow:"hidden",
+                            border:"1px solid "+V.borderS,
+                            boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+                            <div style={{background:V.surface,padding:"11px 14px",
+                              borderBottom:"1px solid "+V.borderS}}>
+                              <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:14,color:V.text}}>
                                 {tt.name}
                               </div>
                             </div>
-                            <div style={{background:"white",padding:"10px 14px",
-                              borderLeft:"1px solid "+V.borderS,borderRight:"1px solid "+V.borderS,
-                              borderBottom:"1px solid "+V.borderS,borderRadius:"0 0 14px 14px"}}>
+                            <div style={{background:"white",padding:"10px 14px"}}>
                               <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,
                                 color:isFreeT?"#16A34A":V.text}}>
                                 {isFreeT ? "Free" : `${tt.price} OG`}
