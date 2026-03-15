@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import jsQR from "jsqr";
 import { X, ScanLine, ChevronDown, CheckCircle, XCircle, RefreshCw, Camera, CameraOff, AlertCircle } from "lucide-react";
 import { V } from "../../utils/constants";
@@ -115,110 +115,54 @@ export default function ScanModal({ events = [], wallet, onClose }) {
   const [camState, setCamState] = useState("idle");
   const [camErr,   setCamErr]   = useState("");
 
-  // scan states: "scanning" | "decoding" | "verifying" | "done"
+  // scan states
   const [scanState, setScanState] = useState("scanning");
-  const setScan = (s) => { scanStateRef.current = s; setScanState(s); };
-  const [lastRaw,    setLastRaw]    = useState("");
-  const [result,     setResult]     = useState(null);  // { ok, tokenId, owner, txHash, ... }
-  const [resultErr,  setResultErr]  = useState("");
+  const [result,    setResult]    = useState(null);
+  const [resultErr, setResultErr] = useState("");
 
   const videoRef   = useRef(null);
   const canvasRef  = useRef(null);
   const streamRef  = useRef(null);
   const rafRef     = useRef(null);
-  const mountedRef = useRef(true);
-  // Ref mirror of scanState so callbacks never go stale
-  const scanStateRef = useRef("scanning");
+  const lastRawRef = useRef("");
+  const scanRef    = useRef("scanning");
+  const selRef     = useRef(sel);
+  const walletRef  = useRef(wallet);
 
-  // ── 1. stopCamera (no deps on other callbacks) ────────────────────────
-  const stopCamera = useCallback(() => {
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-  }, []);
+  selRef.current    = sel;
+  walletRef.current = wallet;
 
-  // Cleanup on unmount — defined after stopCamera so the ref is available
-  useEffect(() => { return () => { mountedRef.current = false; stopCamera(); }; }, [stopCamera]);
+  const setScan = (s) => { scanRef.current = s; setScanState(s); };
 
-  // ── 2. handleQRFound (no deps on other callbacks) ─────────────────────
-  const handleQRFound = useCallback(async (raw) => {
-    if (scanStateRef.current !== "scanning") return;
-    setScan("decoding");
+  const stopStream = () => {
+    if (rafRef.current)    { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (videoRef.current)  { videoRef.current.srcObject = null; }
+  };
 
-    const parsed = parseQR(raw);
-    if (!parsed) {
-      setResultErr(`Unrecognised QR code. Expected Minty Tickets format.\nGot: "${raw.slice(0, 60)}"`);
-      setScan("done"); setResult({ ok: false }); return;
-    }
+  // ── Camera effect — one clean flag per invocation ──────────────────────
+  useEffect(() => {
+    if (!sel) { stopStream(); setCamState("idle"); return; }
 
-    const { tokenId, eventId, epoch } = parsed;
+    // Each effect invocation owns its own `live` flag.
+    // Cleanup sets it false — any async work from THIS invocation aborts.
+    let live = true;
 
-    const now = currentEpoch();
-    if (epoch < now - 2) {
-      setResultErr(`QR code has expired (epoch ${epoch}, current ${now}). Ask the attendee to re-reveal their ticket.`);
-      setScan("done"); setResult({ ok: false }); return;
-    }
+    setCamState("requesting");
+    setCamErr("");
+    setScan("scanning");
+    setResult(null);
+    setResultErr("");
+    lastRawRef.current = "";
 
-    if (sel && eventId !== sel.id) {
-      setResultErr(`This ticket is for event #${eventId}, but you selected "${sel.name}" (event #${sel.id}).`);
-      setScan("done"); setResult({ ok: false }); return;
-    }
-
-    setScan("verifying");
-    try {
-      const res = await verifyAndCheckIn(tokenId, eventId, wallet);
-      if (!mountedRef.current) return;
-      if (res.ok) { setResult(res); setScan("done"); }
-      else { setResultErr(res.reason || "Verification failed."); setScan("done"); setResult({ ok: false }); }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setResultErr("On-chain error: " + (err?.reason || err?.message || "Unknown error"));
-      setScan("done"); setResult({ ok: false });
-    }
-  }, [sel, wallet]);
-
-  // ── 3. decodeFrame (depends on handleQRFound) ─────────────────────────
-  const decodeFrame = useCallback(() => {
-    const video  = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return;
-
-    const w = video.videoWidth, h = video.videoHeight;
-    if (!w || !h) return;
-
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(video, 0, 0, w, h);
-    const imageData = ctx.getImageData(0, 0, w, h);
-
-    const code = jsQR(imageData.data, w, h, { inversionAttempts: "dontInvert" });
-    if (!code) return;
-
-    const raw = code.data;
-    if (raw === lastRaw) return;
-    setLastRaw(raw);
-    handleQRFound(raw);
-  }, [lastRaw, handleQRFound]);
-
-  // ── 4. startCamera (depends on stopCamera + decodeFrame) ──────────────
-  const startCamera = useCallback(async () => {
-    if (!sel) return;
-    stopCamera();
-    setCamState("requesting"); setCamErr("");
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    }).then(stream => {
+      if (!live) { stream.getTracks().forEach(t => t.stop()); return; }
 
       streamRef.current = stream;
       setCamState("active");
-      setScan("scanning");
-      setResult(null); setResultErr(""); setLastRaw("");
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -226,29 +170,77 @@ export default function ScanModal({ events = [], wallet, onClose }) {
       }
 
       const tick = () => {
-        if (!mountedRef.current || !streamRef.current) return;
-        decodeFrame();
+        if (!live || !streamRef.current) return;
+        const v = videoRef.current;
+        const c = canvasRef.current;
+        if (v && c && v.readyState >= 2 && v.videoWidth > 0) {
+          c.width  = v.videoWidth;
+          c.height = v.videoHeight;
+          const ctx = c.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(v, 0, 0, c.width, c.height);
+          const img  = ctx.getImageData(0, 0, c.width, c.height);
+          const code = jsQR(img.data, c.width, c.height, { inversionAttempts: "dontInvert" });
+          if (code?.data && code.data !== lastRawRef.current) {
+            lastRawRef.current = code.data;
+            if (live) handleFound(code.data);
+          }
+        }
         rafRef.current = requestAnimationFrame(tick);
       };
-      setTimeout(() => { if (mountedRef.current && streamRef.current) tick(); }, 300);
 
-    } catch (err) {
-      if (!mountedRef.current) return;
+      setTimeout(() => { if (live) tick(); }, 200);
+
+    }).catch(err => {
+      if (!live) return;
       setCamState("error");
-      if (err.name === "NotAllowedError") setCamErr("Camera permission denied. Please allow camera access in your browser.");
-      else if (err.name === "NotFoundError") setCamErr("No camera found on this device.");
-      else setCamErr("Camera error: " + (err.message || err.name));
-    }
-  }, [sel, stopCamera, decodeFrame]);
+      if      (err.name === "NotAllowedError") setCamErr("Camera permission denied.");
+      else if (err.name === "NotFoundError")   setCamErr("No camera found on this device.");
+      else                                     setCamErr("Camera error: " + (err.message || err.name));
+    });
 
-  // Start/stop camera when selected event changes
-  useEffect(() => {
-    if (sel) startCamera();
-    else stopCamera();
-  }, [sel, startCamera, stopCamera]);
+    function handleFound(raw) {
+      if (scanRef.current !== "scanning") return;
+      setScan("decoding");
+
+      const parsed = parseQR(raw);
+      if (!parsed) {
+        setResultErr(`Unrecognised QR format. Got: "${raw.slice(0,60)}"`);
+        setScan("done"); setResult({ ok: false }); return;
+      }
+
+      const { tokenId, eventId, epoch } = parsed;
+      if (epoch < currentEpoch() - 2) {
+        setResultErr("QR code expired. Ask attendee to re-reveal their ticket.");
+        setScan("done"); setResult({ ok: false }); return;
+      }
+      if (selRef.current && eventId !== selRef.current.id) {
+        setResultErr(`Ticket is for event #${eventId}, not "${selRef.current.name}".`);
+        setScan("done"); setResult({ ok: false }); return;
+      }
+
+      setScan("verifying");
+      verifyAndCheckIn(tokenId, eventId, walletRef.current)
+        .then(res => {
+          if (!live) return;
+          if (res.ok) { setResult(res); setScan("done"); }
+          else        { setResultErr(res.reason || "Verification failed."); setScan("done"); setResult({ ok: false }); }
+        })
+        .catch(err => {
+          if (!live) return;
+          setResultErr("On-chain error: " + (err?.reason || err?.message || "Unknown"));
+          setScan("done"); setResult({ ok: false });
+        });
+    }
+
+    return () => {
+      live = false;
+      stopStream();
+      setCamState("idle");
+    };
+  }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetScan = () => {
-    setResult(null); setResultErr(""); setLastRaw(""); setScan("scanning");
+    setResult(null); setResultErr(""); lastRawRef.current = ""; setScan("scanning");
   };
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -336,7 +328,7 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                     }}>
                       {allEvents.map((ev, i) => (
                         <div key={ev.id}
-                          onMouseDown={() => { setSel(ev); setShowD(false); setResult(null); setResultErr(""); setLastRaw(""); setScan("scanning"); }}
+                          onMouseDown={() => { setSel(ev); setShowD(false); setResult(null); setResultErr(""); lastRawRef.current = ""; setScan("scanning"); }}
                           style={{
                             display:"flex",alignItems:"center",gap:12,
                             padding:"12px 14px",
@@ -382,11 +374,13 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                     {/* Hidden canvas for frame capture */}
                     <canvas ref={canvasRef} style={{display:"none"}}/>
 
-                    {/* Video feed */}
-                    {(camState==="active") && (
-                      <video ref={videoRef} autoPlay playsInline muted
-                        style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                    )}
+                    {/* Video feed — always mounted so ref exists when srcObject is assigned */}
+                    <video ref={videoRef} autoPlay playsInline muted
+                      style={{
+                        width:"100%", height:"100%", objectFit:"cover", display:"block",
+                        opacity: camState === "active" ? 1 : 0,
+                        position: camState === "active" ? "static" : "absolute",
+                      }}/>
 
                     {/* Overlay states */}
                     {camState==="requesting" && (
@@ -401,7 +395,7 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                         <CameraOff size={32} color="#EF4444"/>
                         <div style={{fontFamily:"Outfit",fontWeight:700,fontSize:14,color:"white"}}>Camera Error</div>
                         <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.6}}>{camErr}</div>
-                        <button className="bp" onClick={startCamera} style={{borderRadius:11,padding:"8px 18px",fontSize:13}}>
+                        <button className="bp" onClick={() => setSel(s => s ? {...s} : s)} style={{borderRadius:11,padding:"8px 18px",fontSize:13}}>
                           <Camera size={13}/> Try Again
                         </button>
                       </div>
