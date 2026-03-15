@@ -1,12 +1,19 @@
 // api/mark-checkedin.js — marks a guest as checked-in in Redis
-// Called after a successful on-chain organizerCheckIn
-// POST { eventId, identifier }
+// Uses plain fetch Upstash REST API
 
-const { Redis } = require("@upstash/redis");
-
-function getRedis() {
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) return null;
-  return new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
+async function redis(command) {
+  const url   = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const res  = await fetch(url, {
+      method:  "POST",
+      headers: { Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
+      body:    JSON.stringify(command),
+    });
+    const json = await res.json();
+    return json.result ?? null;
+  } catch (e) { return null; }
 }
 
 module.exports = async function handler(req, res) {
@@ -24,21 +31,20 @@ module.exports = async function handler(req, res) {
   const { eventId, identifier } = body || {};
   if (!eventId || !identifier) return res.status(400).json({ error: "eventId and identifier required" });
 
-  const redis = getRedis();
-  if (!redis) return res.status(200).json({ ok: true, note: "Redis not configured" });
-
   try {
-    const key  = `reg:${eventId}:${identifier.toLowerCase().trim()}`;
-    const existing = await redis.get(key);
+    const key      = `reg:${eventId}:${identifier.toLowerCase().trim()}`;
+    const existing = await redis(["GET", key]);
     if (existing) {
-      const data = typeof existing === "string" ? JSON.parse(existing) : existing;
-      data.checkedIn = true;
+      let data;
+      try { data = typeof existing === "string" ? JSON.parse(existing) : existing; }
+      catch { data = {}; }
+      data.checkedIn   = true;
       data.checkedInAt = Date.now();
-      await redis.set(key, JSON.stringify(data));
+      await redis(["SET", key, JSON.stringify(data)]);
     }
     return res.status(200).json({ ok: true });
   } catch (err) {
-    console.error("[mark-checkedin] error:", err);
-    return res.status(500).json({ error: "Failed to update check-in status." });
+    console.error("[mark-checkedin]", err);
+    return res.status(500).json({ error: "Failed to update." });
   }
 };
