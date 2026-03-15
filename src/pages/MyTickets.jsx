@@ -95,6 +95,20 @@ function TicketCard({ ticket, onOpen, onBurnRequest }) {
   const ev = ticket.event;
   const now = Date.now() / 1000;
   const eventEnded = ev.endTime && now > ev.endTime;
+  const ticketType = ticket.ticketMeta?.ticketType || "Regular";
+
+  // Gradient per ticket type
+  const headerGradient = ticketType === "VIP"
+    ? "linear-gradient(135deg,#D97706,#92400E)"      // gold
+    : ticketType === "Sponsor"
+    ? "linear-gradient(135deg,#7C3AED,#2563EB)"      // purple→blue
+    : "linear-gradient(135deg,#00C48A,#007050)";     // teal (Regular)
+
+  const perfBg = ticketType === "VIP"
+    ? "linear-gradient(135deg,#D97706,#92400E)"
+    : ticketType === "Sponsor"
+    ? "linear-gradient(135deg,#7C3AED,#2563EB)"
+    : "linear-gradient(135deg,#00C48A,#007050)";
 
   return (
     <div className="ci fu" style={{ animationDelay: "0s", overflow:"hidden", position:"relative" }}
@@ -117,7 +131,7 @@ function TicketCard({ ticket, onOpen, onBurnRequest }) {
       )}
 
       {/* Header gradient */}
-      <div style={{ background:"linear-gradient(135deg,#00C48A,#007050)", padding:"16px 16px 0",
+      <div style={{ background:headerGradient, padding:"16px 16px 0",
         display:"flex", alignItems:"center", gap:12 }}>
         <div style={{ background:"rgba(255,255,255,.92)", borderRadius:8, padding:5, flexShrink:0 }}>
           <QRCode data={"MINTY-"+ticket.tokenId} size={52} dark="#1F2937"/>
@@ -127,20 +141,19 @@ function TicketCard({ ticket, onOpen, onBurnRequest }) {
             lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {ev.name}
           </div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,.7)", marginTop:3 }}>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,.7)", marginTop:3, display:"flex", alignItems:"center", gap:6 }}>
             Token #{ticket.tokenId}
-            {ticket.ticketMeta?.ticketType && ticket.ticketMeta.ticketType !== "Regular" && (
-              <span style={{ marginLeft:6, background:"rgba(255,255,255,.2)", borderRadius:4,
-                padding:"1px 6px", fontFamily:"Outfit", fontWeight:700 }}>
-                {ticket.ticketMeta.ticketType}
-              </span>
-            )}
+            <span style={{ background:"rgba(255,255,255,.22)", borderRadius:5,
+              padding:"1px 7px", fontFamily:"Outfit", fontWeight:800, fontSize:10,
+              color:"white", letterSpacing:".04em" }}>
+              {ticketType.toUpperCase()}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Perforation */}
-      <div style={{ background:"linear-gradient(135deg,#00C48A,#007050)", padding:"0 10px",
+      <div style={{ background:perfBg, padding:"0 10px",
         display:"flex", alignItems:"center" }}>
         <div style={{ width:12, height:12, borderRadius:"50%", background:"white", flexShrink:0 }}/>
         <div style={{ flex:1, height:0, borderTop:"2px dashed rgba(255,255,255,.35)", margin:"0 3px" }}/>

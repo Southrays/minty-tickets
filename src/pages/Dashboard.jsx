@@ -288,68 +288,100 @@ function EventAnalyticsModal({ event, onClose }) {
                 </div>
               </div>
 
-              {/* Ticket types if applicable */}
-              {event.ticketTypes && event.ticketTypes.length > 1 && (
+              {/* Ticket types — with sold counts derived from registrations */}
+              {event.ticketTypes && event.ticketTypes.filter(t=>t.enabled!==false).length > 0 && (
                 <div>
                   <div style={{ fontSize:12, fontFamily:"Outfit", fontWeight:700, color:V.muted, marginBottom:8, textTransform:"uppercase", letterSpacing:".06em" }}>Ticket Types</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                    {event.ticketTypes.filter(t=>t.enabled!==false).map(tt=>(
-                      <div key={tt.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                        background:V.surface, borderRadius:9, padding:"9px 12px" }}>
-                        <span style={{ fontFamily:"Outfit", fontWeight:700, fontSize:13, color:V.text }}>{tt.name}</span>
-                        <span style={{ fontSize:13, color:V.muted }}>{tt.price && tt.price!=="0" ? `${tt.price} OG` : "Free"}</span>
-                      </div>
-                    ))}
+                    {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
+                      const soldCount = regs.filter(r => (r.ticketType||"Regular") === tt.name).length;
+                      return (
+                        <div key={tt.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                          background:V.surface, borderRadius:9, padding:"9px 12px" }}>
+                          <span style={{ fontFamily:"Outfit", fontWeight:700, fontSize:13, color:V.text }}>{tt.name}</span>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            {soldCount > 0 && (
+                              <span style={{ fontSize:11, color:V.muted, fontFamily:"Outfit", fontWeight:600 }}>
+                                {soldCount} sold
+                              </span>
+                            )}
+                            <span style={{ fontSize:13, color:V.muted }}>{tt.price && tt.price!=="0" ? `${tt.price} OG` : "Free"}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            /* Guests tab */
+            /* Guests tab — shows email buyers, wallet buyers, with ticket type on right */
             regs.length === 0 ? (
               <div style={{ textAlign:"center", padding:"32px 0", color:V.mutedL }}>
                 <Users size={36} style={{ margin:"0 auto 12px", opacity:.25 }}/>
                 <div style={{ fontFamily:"Outfit", fontWeight:600, fontSize:14 }}>
-                  {event.requiredFields ? "No guest registrations yet" : "This event doesn't collect guest data"}
+                  {event.requiredFields || event.acceptsOffchainTickets
+                    ? "No attendees yet"
+                    : "Guest data collection is not enabled for this event"}
                 </div>
               </div>
             ) : (
               <div>
-                <div style={{ fontSize:13, color:V.muted, marginBottom:12 }}>
-                  <strong style={{ color:V.text }}>{regs.length}</strong> registration{regs.length!==1?"s":""}
+                <div style={{ fontSize:13, color:V.muted, marginBottom:14, display:"flex", alignItems:"center", gap:12 }}>
+                  <strong style={{ color:V.text }}>{regs.length}</strong> attendee{regs.length!==1?"s":""}
+                  <span style={{ fontSize:11, color:V.mutedL }}>
+                    · click any address to copy
+                  </span>
                 </div>
-                {/* Guest table */}
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {regs.map((reg, i) => (
-                    <div key={i} style={{ background:V.surface, borderRadius:11, padding:"12px 14px",
-                      border:"1px solid "+V.borderS }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:fieldCols.length?8:0 }}>
-                        <div style={{ width:28, height:28, borderRadius:"50%", background:V.brand+"20",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize:12, fontFamily:"Outfit", fontWeight:800, color:V.brand, flexShrink:0 }}>
-                          {(i+1)}
+                  {regs.map((reg, i) => {
+                    const isWallet  = reg.identifier?.startsWith("0x");
+                    const fullId    = reg.identifier || "";
+                    const dispId    = isWallet ? truncateAddr(fullId) : fullId;
+                    const ttName    = reg.ticketType || "Regular";
+                    const ttColor   = ttName==="VIP"?"#D97706":ttName==="Sponsor"?V.brand:"#16A34A";
+                    const ttBg      = ttName==="VIP"?"#FEF3C7":ttName==="Sponsor"?V.b50:"#F0FDF4";
+                    return (
+                      <div key={i} style={{ background:V.surface, borderRadius:11, padding:"12px 14px",
+                        border:"1px solid "+V.borderS }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:fieldCols.length?8:0 }}>
+                          <div style={{ width:28, height:28, borderRadius:"50%", background:isWallet?V.brand+"20":"#FEF3C7",
+                            display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
+                            {isWallet ? "👛" : "✉️"}
+                          </div>
+                          {/* Identifier — click to copy full value */}
+                          <span title={fullId}
+                            onClick={() => navigator.clipboard.writeText(fullId)}
+                            style={{ fontSize:isWallet?12:13, fontFamily:isWallet?"monospace":"DM Sans",
+                              color:V.text, cursor:"pointer", flex:1, overflow:"hidden",
+                              textOverflow:"ellipsis", whiteSpace:"nowrap",
+                              textDecoration:"underline dotted" }}>
+                            {dispId}
+                          </span>
+                          {/* Ticket type badge on right */}
+                          <span style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700,
+                            color:ttColor, background:ttBg, borderRadius:6,
+                            padding:"2px 8px", flexShrink:0 }}>
+                            {ttName}
+                          </span>
+                          <span style={{ fontSize:10, color:V.mutedL, flexShrink:0, marginLeft:4 }}>
+                            {reg.submittedAt ? new Date(reg.submittedAt).toLocaleDateString() : ""}
+                          </span>
                         </div>
-                        <span style={{ fontSize:12, fontFamily:"monospace", color:V.muted,
-                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {reg.identifier?.startsWith("0x") ? truncateAddr(reg.identifier) : reg.identifier}
-                        </span>
-                        <span style={{ marginLeft:"auto", fontSize:10, color:V.mutedL, flexShrink:0 }}>
-                          {reg.submittedAt ? new Date(reg.submittedAt).toLocaleDateString() : ""}
-                        </span>
+                        {fieldCols.length > 0 && (
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:6 }}>
+                            {fieldCols.map(col => reg[col] && (
+                              <div key={col} style={{ background:"white", borderRadius:7, padding:"6px 9px" }}>
+                                <div style={{ fontSize:9, fontFamily:"Outfit", fontWeight:800, color:V.mutedL,
+                                  textTransform:"uppercase", letterSpacing:".07em", marginBottom:2 }}>{col}</div>
+                                <div style={{ fontSize:12, color:V.text, wordBreak:"break-word" }}>{reg[col]}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      {fieldCols.length > 0 && (
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:6 }}>
-                          {fieldCols.map(col => reg[col] && (
-                            <div key={col} style={{ background:"white", borderRadius:7, padding:"6px 9px" }}>
-                              <div style={{ fontSize:9, fontFamily:"Outfit", fontWeight:800, color:V.mutedL,
-                                textTransform:"uppercase", letterSpacing:".07em", marginBottom:2 }}>{col}</div>
-                              <div style={{ fontSize:12, color:V.text, wordBreak:"break-word" }}>{reg[col]}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )
