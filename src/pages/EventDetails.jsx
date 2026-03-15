@@ -17,6 +17,13 @@ function calendarDays(startTs, endTs) {
   return Math.round((e - s) / 86400000) + 1;
 }
 
+function ticketTypeBadgeStyle(type) {
+  if (!type || type === "Regular") return { background:"rgba(0,196,138,.18)", color:"#007050" };
+  if (type === "VIP")     return { background:"rgba(217,119,6,.18)", color:"#92400E" };
+  if (type === "Sponsor") return { background:"rgba(109,40,217,.18)", color:"#5B21B6" };
+  return { background:"rgba(0,0,0,.1)", color:"#374151" };
+}
+
 // ── Guest data form step ──────────────────────────────────────────────────────
 function GuestDataForm({ event, identifier, onSubmit, onBack }) {
   const rf = event.requiredFields || {};
@@ -147,11 +154,13 @@ function TicketModal({ event, onWallet, onClose, onEmailSent }) {
       const res = await fetch("/api/send-ticket", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
-          name:          guestData?.name || undefined,
-          email:         email.trim(),
-          eventId:       String(event.id),
-          eventName:     event.name,
-          ticketType:    selType?.name || "Regular",
+          name:           guestData?.name || undefined,
+          email:          email.trim(),
+          eventId:        String(event.id),
+          eventName:      event.name,
+          ticketType:     selType?.name || "Regular",
+          organizerEmail: event.organizerEmail || undefined,
+          guestFields:    guestData || undefined,
           eventDate:     event.startTime
             ? new Date(event.startTime*1000).toLocaleDateString("en-US",
                 {weekday:"long",year:"numeric",month:"long",day:"numeric"})
@@ -658,9 +667,11 @@ export default function EventDetailsPage({ onTicketBought }) {
         await fetch("/api/submit-registration", {
           method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({
-            eventId: String(event.id),
-            identifier: wallet.toLowerCase(),
-            fields: { ...(guestData||{}), ticketType: ticketType||"Regular" },
+            eventId:        String(event.id),
+            eventName:      event.name,
+            organizerEmail: event.organizerEmail || undefined,
+            identifier:     wallet.toLowerCase(),
+            fields:         { ...(guestData||{}), ticketType: ticketType||"Regular" },
           }),
         }).catch(()=>{});
       }
@@ -920,6 +931,8 @@ export default function EventDetailsPage({ onTicketBought }) {
                       textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Ticket Types</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
                       {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
+                        const isVIP     = tt.name === "VIP";
+                        const isSponsor = tt.name === "Sponsor";
                         const isFreeT   = !tt.price || tt.price === "0";
                         return (
                           <div key={tt.name} style={{borderRadius:12,overflow:"hidden",

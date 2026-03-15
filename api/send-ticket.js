@@ -31,7 +31,8 @@ module.exports = async function handler(req, res) {
     try { body = JSON.parse(body); } catch { return res.status(400).json({ error: "Invalid JSON body." }); }
   }
 
-  const { name, email, eventId, eventName, eventDate, eventLocation } = body || {};
+  const { name, email, eventId, eventName, eventDate, eventLocation,
+          organizerEmail, guestFields, ticketType } = body || {};
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ error: "A valid email address is required." });
@@ -158,8 +159,9 @@ module.exports = async function handler(req, res) {
       const regKey  = `reg:${eventId}:${email.toLowerCase().trim()}`;
       const regData = JSON.stringify({
         identifier:  email.toLowerCase().trim(),
-        ticketType:  body?.ticketType || "Regular",
+        ticketType:  ticketType || body?.ticketType || "Regular",
         name:        (name||"").trim() || undefined,
+        ...(guestFields || {}),
         checkedIn:   false,
         submittedAt: Date.now(),
       });
@@ -175,6 +177,58 @@ module.exports = async function handler(req, res) {
     }
   } else {
     console.warn("[redis] Not configured — dedup and count not persisted");
+  }
+
+  // ── Notify organizer (if they provided a notification email) ──────────────
+  if (organizerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(organizerEmail)) {
+    try {
+      // Build a summary of guest fields
+      const fieldRows = guestFields && Object.keys(guestFields).length > 0
+        ? Object.entries(guestFields)
+            .filter(([k]) => k !== "ticketType")
+            .map(([k,v]) => `<tr>
+              <td style="padding:7px 12px;font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;border-bottom:1px solid #F3F4F6;">${k}</td>
+              <td style="padding:7px 12px;font-size:13px;color:#111827;border-bottom:1px solid #F3F4F6;">${v}</td>
+            </tr>`).join("")
+        : "";
+
+      const notifHtml = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F8F7FF;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:white;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(109,40,217,.1);">
+  <tr><td style="background:linear-gradient(135deg,#7C3AED,#5B21B6);padding:24px 28px;">
+    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.1em;">Minty Tickets · New Attendee</p>
+    <p style="margin:0;font-size:20px;font-weight:800;color:white;">${eventName}</p>
+  </td></tr>
+  <tr><td style="padding:24px 28px;">
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;">
+      <strong style="color:#111827;">${email}</strong> just got a ticket for your event.
+    </p>
+    <table style="width:100%;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+      <tr>
+        <td style="padding:7px 12px;font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #F3F4F6;">Ticket Type</td>
+        <td style="padding:7px 12px;font-size:13px;color:#111827;border-bottom:1px solid #F3F4F6;">${ticketType || "Regular"}</td>
+      </tr>
+      ${fieldRows}
+    </table>
+    <p style="margin:0;font-size:12px;color:#9CA3AF;">Check your Dashboard → event → Guests tab to see all attendees.</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+
+      await resend.emails.send({
+        from:    fromEmail,
+        to:      organizerEmail,
+        subject: `🎟️ New attendee for ${eventName} — ${email}`,
+        html:    notifHtml,
+      });
+      console.log(`[organizer] Notification sent to ${organizerEmail}`);
+    } catch (notifErr) {
+      // Non-fatal — guest already got their ticket
+      console.error("[organizer] Notification failed:", notifErr?.message);
+    }
   }
 
   return res.status(200).json({ ok: true });

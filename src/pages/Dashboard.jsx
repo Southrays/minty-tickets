@@ -176,7 +176,7 @@ function EventAnalyticsModal({ event, onClose }) {
     (async () => {
       const [ec, rs] = await Promise.all([
         fetchEmailCount(event.id),
-        event.requiredFields ? fetchRegistrations(event.id) : Promise.resolve([]),
+        fetchRegistrations(event.id),   // always fetch — email + wallet buyers both register
       ]);
       setEmailCount(ec);
       setRegs(rs);
