@@ -1,6 +1,6 @@
-export const CONTRACT_ADDRESS   = "0x930ABC3c96401F7AcbEf5391eAf6f1a9918e8d5e";
+export const CONTRACT_ADDRESS   = "0x3203fa0798A4C1B5446179b2195a215e38C51f67";
 export const AI_SIGNER_ADDRESS  = "0x2032Fa3f981eCc614f459e43d1D7CE17A604A9C4";
-export const PLATFORM_FEE_PCT   = 2;
+export const PLATFORM_FEE_PCT   = 3;
 export const OG_TO_USD_RATE     = 0.83;
 
 export const ZERO_G_CHAIN = {

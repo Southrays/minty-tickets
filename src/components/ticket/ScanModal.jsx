@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import jsQR from "jsqr";
-import { X, ScanLine, ChevronDown, CheckCircle, XCircle, RefreshCw, Camera, CameraOff } from "lucide-react";
+import { X, ScanLine, ChevronDown, CheckCircle, XCircle, RefreshCw, Camera, CameraOff, AlertCircle } from "lucide-react";
 import { V } from "../../utils/constants";
 import { formatDate, shortAddr } from "../../utils/format";
 import { getReadContract, getWriteContract } from "../../utils/contract";
@@ -16,7 +16,7 @@ function parseQR(raw) {
 }
 
 // ── Verify a ticket on-chain and call checkIn ──────────────────────────────
-async function verifyAndCheckIn(tokenId, eventId) {
+async function verifyAndCheckIn(tokenId, eventId, organizerAddress) {
   const rc = await getReadContract();
 
   // 1. Read ticket data
@@ -33,39 +33,43 @@ async function verifyAndCheckIn(tokenId, eventId) {
     return { ok: false, reason: `Ticket #${tokenId} was already checked in.`, alreadyUsed: true };
   }
 
-  // 4. Check ownership — ticket holder
+  // 4. Read ticket owner
   const owner = await rc.ownerOf(tokenId);
 
-  // 5. Attempt on-chain checkIn
-  // The contract's checkIn requires (tokenId, nonce, expiration, aiSignerSignature).
-  // If your deployment uses a trusted AI signer backend, call that endpoint here.
-  // As a fallback we try the organizer-direct path via syncOfflineCheckIns([tokenId], [[]]).
+  // 5. Use organizerCheckIn — works for organizer OR any check-in manager they appointed
+  //    The contract allows check-in from 10 hours before event start through event end
   try {
     const wc = await getWriteContract();
-    const tx = await wc.syncOfflineCheckIns(eventId, [tokenId], [[]]);
+    const tx = await wc.organizerCheckIn(tokenId);
     await tx.wait();
     return {
       ok: true,
       tokenId,
       owner: shortAddr(owner),
       txHash: tx.hash,
-      method: "syncOfflineCheckIns",
+      method: "organizerCheckIn",
     };
-  } catch (syncErr) {
-    // syncOfflineCheckIns may require a valid merkle proof — try checkIn with a dummy nonce
-    // to get a meaningful revert reason instead
-    const errMsg = syncErr?.reason || syncErr?.message || "";
-
-    // If the contract verified correctly but the on-chain checkIn path needs AI sig,
-    // return a "verified but not checked in on-chain" state so the organizer can
-    // manually note it while the AI signer backend is integrated.
-    return {
-      ok: true,
-      onChainCheckInFailed: true,
-      tokenId,
-      owner: shortAddr(owner),
-      contractError: errMsg.slice(0, 120),
-    };
+  } catch (orgErr) {
+    // organizerCheckIn failed — try syncOfflineCheckIns as fallback
+    // (useful if network was briefly down and we're syncing a batch)
+    try {
+      const wc = await getWriteContract();
+      const tx = await wc.syncOfflineCheckIns(eventId, [tokenId]);
+      await tx.wait();
+      return {
+        ok: true,
+        tokenId,
+        owner: shortAddr(owner),
+        txHash: tx.hash,
+        method: "syncOfflineCheckIns",
+      };
+    } catch (syncErr) {
+      const errMsg = (syncErr?.reason || syncErr?.message || "").slice(0, 160);
+      return {
+        ok: false,
+        reason: `Check-in failed: ${errMsg || "Make sure you are the organizer or an appointed check-in manager."}`,
+      };
+    }
   }
 }
 
@@ -73,6 +77,37 @@ async function verifyAndCheckIn(tokenId, eventId) {
 export default function ScanModal({ events = [], wallet, onClose }) {
   const [sel,      setSel]      = useState(null);
   const [showD,    setShowD]    = useState(false);
+
+  // Check-in manager: enter an organizer address to load their events
+  const [orgInput,    setOrgInput]    = useState("");
+  const [orgEvents,   setOrgEvents]   = useState(null);  // null = not loaded
+  const [orgLoading,  setOrgLoading]  = useState(false);
+  const [orgErr,      setOrgErr]      = useState("");
+
+  const loadOrgEvents = async () => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(orgInput.trim())) {
+      setOrgErr("Enter a valid wallet address (0x…)"); return;
+    }
+    setOrgLoading(true); setOrgErr(""); setOrgEvents(null); setSel(null);
+    try {
+      const { fetchOrganizerEvents, isCheckInManagerFor } = await import("../../utils/contract");
+      const [evs, isMgr] = await Promise.all([
+        fetchOrganizerEvents(orgInput.trim()),
+        wallet ? isCheckInManagerFor(orgInput.trim(), wallet) : Promise.resolve(false),
+      ]);
+      if (!isMgr) {
+        setOrgErr("You are not a check-in manager for this organizer.");
+        setOrgEvents(null);
+      } else {
+        setOrgEvents(evs.filter(e => { const now = Date.now()/1000; return now >= e.startTime && now <= e.endTime + 86400; }));
+        if (!evs.length) setOrgErr("This organizer has no active events.");
+      }
+    } catch (e) { setOrgErr(e?.message || "Failed to load events."); }
+    finally { setOrgLoading(false); }
+  };
+
+  // Combine own events + loaded organizer events for dropdown
+  const allEvents = orgEvents !== null ? orgEvents : events;
 
   // camera states: "idle" | "requesting" | "active" | "error"
   const [camState, setCamState] = useState("idle");
@@ -230,7 +265,7 @@ export default function ScanModal({ events = [], wallet, onClose }) {
         </div>
 
         <div style={{padding:"0 24px 24px"}}>
-          {events.length === 0 ? (
+          {allEvents.length === 0 ? (
             <div style={{textAlign:"center",padding:"28px 0",color:V.muted}}>
               <ScanLine size={36} style={{margin:"0 auto 12px",opacity:.3}}/>
               <div style={{fontFamily:"Outfit",fontWeight:600,fontSize:15,marginBottom:5}}>No events to scan</div>
@@ -238,6 +273,32 @@ export default function ScanModal({ events = [], wallet, onClose }) {
             </div>
           ) : (
             <>
+              {/* Check-in manager: scan for another organizer */}
+              <div style={{marginBottom:12,background:V.b50,borderRadius:12,padding:"10px 12px",border:"1px solid "+V.b100}}>
+                <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:V.brand,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>
+                  Scan for another organizer
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <input className="inp" placeholder="Organizer wallet 0x…"
+                    value={orgInput} onChange={e=>{setOrgInput(e.target.value);setOrgErr("");}}
+                    style={{flex:1,fontSize:12,padding:"7px 10px"}}/>
+                  <button className="bp" onClick={loadOrgEvents} disabled={orgLoading||!orgInput}
+                    style={{padding:"7px 12px",borderRadius:10,fontSize:12,gap:4,flexShrink:0}}>
+                    {orgLoading?<RefreshCw size={12} className="spin"/>:"Load"}
+                  </button>
+                </div>
+                {orgErr && <div style={{fontSize:11,color:"#EF4444",marginTop:6,display:"flex",alignItems:"center",gap:4}}><AlertCircle size={10}/>{orgErr}</div>}
+                {orgEvents!==null && !orgErr && (
+                  <div style={{fontSize:11,color:"#16A34A",marginTop:6}}>✓ {orgEvents.length} active event{orgEvents.length!==1?"s":""} loaded</div>
+                )}
+                {orgEvents!==null && (
+                  <button className="bg" onClick={()=>{setOrgEvents(null);setOrgInput("");setSel(null);setOrgErr("");}}
+                    style={{fontSize:11,marginTop:6,gap:4,color:V.muted}}>
+                    <X size={10}/>Clear — show my events
+                  </button>
+                )}
+              </div>
+
               {/* Event selector */}
               <div style={{marginBottom:16,position:"relative",zIndex:100}}>
                 <label className="lbl">Select Event to Scan</label>
@@ -271,14 +332,14 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                       maxHeight:280,
                       overflowY:"auto",
                     }}>
-                      {events.map((ev, i) => (
+                      {allEvents.map((ev, i) => (
                         <div key={ev.id}
                           onMouseDown={() => { setSel(ev); setShowD(false); setResult(null); setResultErr(""); setLastRaw(""); setScan("scanning"); }}
                           style={{
                             display:"flex",alignItems:"center",gap:12,
                             padding:"12px 14px",
                             cursor:"pointer",
-                            borderBottom: i < events.length - 1 ? "1px solid "+V.borderS : "none",
+                            borderBottom: i < allEvents.length - 1 ? "1px solid "+V.borderS : "none",
                             background: sel?.id === ev.id ? V.b50 : "#fff",
                             transition:"background .12s",
                           }}
@@ -376,57 +437,30 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                   {/* Result card */}
                   {scanState==="done" && result && result.ok && (
                     <div style={{borderRadius:14,overflow:"hidden",marginBottom:10}}>
-                      {result.onChainCheckInFailed ? (
-                        /* Ticket is valid but on-chain checkIn tx failed (needs AI signer) */
-                        <div style={{background:"#FFFBEB",border:"1px solid #FCD34D",borderRadius:14,padding:18}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                            <div style={{width:38,height:38,borderRadius:11,background:"#FEF3C7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                              <CheckCircle size={20} color="#D97706"/>
-                            </div>
-                            <div>
-                              <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:15,color:"#92400E"}}>Ticket Valid — Manual Check-in</div>
-                              <div style={{fontSize:12,color:"#B45309",marginTop:2}}>Verified on-chain · checkIn tx needs AI signer</div>
-                            </div>
+                      <div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:14,padding:18}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                          <div style={{width:42,height:42,borderRadius:12,background:"#DCFCE7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            <CheckCircle size={22} color="#16A34A"/>
                           </div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                            {[{l:"Token ID",v:"#"+result.tokenId},{l:"Owner",v:result.owner}].map(({l,v})=>(
-                              <div key={l} style={{background:"rgba(0,0,0,.05)",borderRadius:8,padding:"8px 10px"}}>
-                                <div style={{fontSize:9,color:"#92400E",fontFamily:"Outfit",fontWeight:800,textTransform:"uppercase",letterSpacing:".1em",marginBottom:2}}>{l}</div>
-                                <div style={{fontSize:13,fontFamily:"Outfit",fontWeight:700,color:"#78350F"}}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{fontSize:11,color:"#92400E",marginTop:10,lineHeight:1.5}}>
-                            <strong>Note:</strong> On-chain checkIn requires a signature from the AI signer service. Deploy the signer backend and implement <code>checkIn(tokenId, nonce, expiration, sig)</code>.
+                          <div>
+                            <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:16,color:"#15803D"}}>Checked In!</div>
+                            <div style={{fontSize:12,color:"#166534",marginTop:2}}>Ticket verified and marked on-chain</div>
                           </div>
                         </div>
-                      ) : (
-                        /* Full success — checked in on-chain */
-                        <div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:14,padding:18}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                            <div style={{width:42,height:42,borderRadius:12,background:"#DCFCE7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                              <CheckCircle size={22} color="#16A34A"/>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                          {[{l:"Token ID",v:"#"+result.tokenId},{l:"Owner",v:result.owner}].map(({l,v})=>(
+                            <div key={l} style={{background:"rgba(0,0,0,.04)",borderRadius:8,padding:"8px 10px"}}>
+                              <div style={{fontSize:9,color:"#166534",fontFamily:"Outfit",fontWeight:800,textTransform:"uppercase",letterSpacing:".1em",marginBottom:2}}>{l}</div>
+                              <div style={{fontSize:13,fontFamily:"Outfit",fontWeight:700,color:"#15803D"}}>{v}</div>
                             </div>
-                            <div>
-                              <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:16,color:"#15803D"}}>Checked In!</div>
-                              <div style={{fontSize:12,color:"#166534",marginTop:2}}>Ticket verified and marked on-chain</div>
-                            </div>
-                          </div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                            {[{l:"Token ID",v:"#"+result.tokenId},{l:"Owner",v:result.owner}].map(({l,v})=>(
-                              <div key={l} style={{background:"rgba(0,0,0,.04)",borderRadius:8,padding:"8px 10px"}}>
-                                <div style={{fontSize:9,color:"#166534",fontFamily:"Outfit",fontWeight:800,textTransform:"uppercase",letterSpacing:".1em",marginBottom:2}}>{l}</div>
-                                <div style={{fontSize:13,fontFamily:"Outfit",fontWeight:700,color:"#15803D"}}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          {result.txHash && (
-                            <div style={{fontSize:11,fontFamily:"monospace",color:"#16A34A",background:"rgba(0,0,0,.04)",borderRadius:7,padding:"5px 9px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                              Tx: {result.txHash}
-                            </div>
-                          )}
+                          ))}
                         </div>
-                      )}
+                        {result.txHash && (
+                          <div style={{fontSize:11,fontFamily:"monospace",color:"#16A34A",background:"rgba(0,0,0,.04)",borderRadius:7,padding:"5px 9px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            Tx: {result.txHash}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 

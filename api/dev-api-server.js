@@ -1,49 +1,34 @@
-// scripts/dev-api-server.js
-// Run alongside `npm start` so /api/* calls work on localhost.
-// Usage: node scripts/dev-api-server.js
-// Requires: npm install --save-dev express dotenv
-
 require("dotenv").config({ path: ".env.local" });
 
 const express = require("express");
 const app     = express();
 
-// ── Body parsing ─────────────────────────────────────────────────────────────
-// Image upload route gets raw bytes — register BEFORE json middleware
-// and explicitly SKIP json parsing for that path
+// Raw body for image uploads — must be BEFORE json middleware
 app.use((req, res, next) => {
   if (req.path === "/api/upload-image") {
-    // Read raw bytes into req.body as a Buffer
     express.raw({ type: "*/*", limit: "10mb" })(req, res, next);
   } else {
     express.json()(req, res, next);
   }
 });
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-app.all("/api/send-ticket",  require("../api/send-ticket"));
-app.all("/api/ticket-count", require("../api/ticket-count"));
-app.all("/api/upload-image", require("../api/upload-image"));
+app.all("/api/send-ticket",          require("../api/send-ticket"));
+app.all("/api/ticket-count",         require("../api/ticket-count"));
+app.all("/api/upload-image",         require("../api/upload-image"));
+app.all("/api/submit-registration",  require("../api/submit-registration"));
+app.all("/api/get-registrations",    require("../api/get-registrations"));
 
-// ── Catch-all: return JSON 404 instead of Express HTML page ──────────────────
-app.use((req, res) => {
-  res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
-});
-
-// ── Global error handler: always return JSON, never HTML ─────────────────────
-app.use((err, req, res, next) => {
-  console.error("[dev-api] Unhandled error:", err);
-  res.status(500).json({ error: err?.message || "Internal server error" });
-});
+// Always return JSON errors — never HTML
+app.use((req, res) => res.status(404).json({ error: `Not found: ${req.method} ${req.path}` }));
+app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: err?.message || "Server error" }); });
 
 const PORT = 3001;
 app.listen(PORT, () => {
-  const ok  = v => v ? "✓" : "✗";
-  const env = process.env;
-  console.log(`\n[dev-api] API server → http://localhost:${PORT}`);
-  console.log(`[dev-api] RESEND_API_KEY        ${ok(env.RESEND_API_KEY)}  ${env.RESEND_API_KEY    ? "set" : "MISSING"}`);
-  console.log(`[dev-api] FROM_EMAIL            ${ok(env.FROM_EMAIL)}  ${env.FROM_EMAIL        ? env.FROM_EMAIL : "MISSING"}`);
-  console.log(`[dev-api] KV_REST_API_URL       ${ok(env.KV_REST_API_URL)}  ${env.KV_REST_API_URL   ? "set (dedup + count enabled)" : "MISSING — dedup disabled"}`);
-  console.log(`[dev-api] KV_REST_API_TOKEN     ${ok(env.KV_REST_API_TOKEN)}  ${env.KV_REST_API_TOKEN ? "set" : "MISSING"}`);
-  console.log(`[dev-api] BLOB_READ_WRITE_TOKEN ${ok(env.BLOB_READ_WRITE_TOKEN)}  ${env.BLOB_READ_WRITE_TOKEN ? "set (image upload enabled)" : "MISSING — upload disabled"}\n`);
+  const e = process.env;
+  const ok = v => v ? "✓" : "✗";
+  console.log(`\n[dev-api] → http://localhost:${PORT}`);
+  console.log(`[dev-api] RESEND_API_KEY        ${ok(e.RESEND_API_KEY)}  ${e.RESEND_API_KEY ? "set" : "MISSING"}`);
+  console.log(`[dev-api] FROM_EMAIL            ${ok(e.FROM_EMAIL)}  ${e.FROM_EMAIL || "MISSING"}`);
+  console.log(`[dev-api] KV_REST_API_URL       ${ok(e.KV_REST_API_URL)}  ${e.KV_REST_API_URL ? "set" : "MISSING"}`);
+  console.log(`[dev-api] BLOB_READ_WRITE_TOKEN ${ok(e.BLOB_READ_WRITE_TOKEN)}  ${e.BLOB_READ_WRITE_TOKEN ? "set" : "MISSING"}\n`);
 });
