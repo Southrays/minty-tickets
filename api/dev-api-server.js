@@ -17,6 +17,7 @@ app.all("/api/ticket-count",         require("../api/ticket-count"));
 app.all("/api/upload-image",         require("../api/upload-image"));
 app.all("/api/submit-registration",  require("../api/submit-registration"));
 app.all("/api/get-registrations",    require("../api/get-registrations"));
+app.all("/api/mark-checkedin",       require("../api/mark-checkedin"));
 
 // Always return JSON errors — never HTML
 app.use((req, res) => res.status(404).json({ error: `Not found: ${req.method} ${req.path}` }));

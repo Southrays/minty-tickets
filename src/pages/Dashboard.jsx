@@ -315,23 +315,25 @@ function EventAnalyticsModal({ event, onClose }) {
               )}
             </div>
           ) : (
-            /* Guests tab — shows email buyers, wallet buyers, with ticket type on right */
+            /* Guests tab */
             regs.length === 0 ? (
               <div style={{ textAlign:"center", padding:"32px 0", color:V.mutedL }}>
                 <Users size={36} style={{ margin:"0 auto 12px", opacity:.25 }}/>
                 <div style={{ fontFamily:"Outfit", fontWeight:600, fontSize:14 }}>
-                  {event.requiredFields || event.acceptsOffchainTickets
-                    ? "No attendees yet"
-                    : "Guest data collection is not enabled for this event"}
+                  No attendees yet
+                </div>
+                <div style={{ fontSize:12, color:V.mutedL, marginTop:4 }}>
+                  Guests appear here once they buy a ticket
                 </div>
               </div>
             ) : (
               <div>
-                <div style={{ fontSize:13, color:V.muted, marginBottom:14, display:"flex", alignItems:"center", gap:12 }}>
-                  <strong style={{ color:V.text }}>{regs.length}</strong> attendee{regs.length!==1?"s":""}
-                  <span style={{ fontSize:11, color:V.mutedL }}>
-                    · click any address to copy
-                  </span>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                  marginBottom:14 }}>
+                  <div style={{ fontSize:13, color:V.muted }}>
+                    <strong style={{ color:V.text }}>{regs.length}</strong> attendee{regs.length!==1?"s":""}
+                  </div>
+                  <div style={{ fontSize:11, color:V.mutedL }}>click address/email to copy</div>
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {regs.map((reg, i) => {
@@ -339,41 +341,66 @@ function EventAnalyticsModal({ event, onClose }) {
                     const fullId    = reg.identifier || "";
                     const dispId    = isWallet ? truncateAddr(fullId) : fullId;
                     const ttName    = reg.ticketType || "Regular";
-                    const ttColor   = ttName==="VIP"?"#D97706":ttName==="Sponsor"?V.brand:"#16A34A";
-                    const ttBg      = ttName==="VIP"?"#FEF3C7":ttName==="Sponsor"?V.b50:"#F0FDF4";
+                    const isVIP     = ttName === "VIP";
+                    const isSponsor = ttName === "Sponsor";
+                    const ttColor   = isVIP?"#92400E":isSponsor?V.brand:"#166534";
+                    const ttBg      = isVIP?"#FEF3C7":isSponsor?V.b50:"#DCFCE7";
+                    const ttBorder  = isVIP?"#FDE68A":isSponsor?V.b100:"#86EFAC";
+                    const ttIcon    = isVIP?"👑":isSponsor?"💎":"🎟️";
+                    const checkedIn = reg.checkedIn === true;
                     return (
-                      <div key={i} style={{ background:V.surface, borderRadius:11, padding:"12px 14px",
-                        border:"1px solid "+V.borderS }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:fieldCols.length?8:0 }}>
-                          <div style={{ width:28, height:28, borderRadius:"50%", background:isWallet?V.brand+"20":"#FEF3C7",
-                            display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
+                      <div key={i} style={{ background:V.surface, borderRadius:12,
+                        border:"1px solid "+V.borderS, overflow:"hidden" }}>
+                        {/* Main row */}
+                        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px",
+                          borderBottom: fieldCols.length > 0 ? "1px solid "+V.borderS : "none" }}>
+                          {/* Avatar */}
+                          <div style={{ width:32, height:32, borderRadius:"50%",
+                            background:isWallet?V.brand+"18":"#FEF3C7",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            fontSize:15, flexShrink:0 }}>
                             {isWallet ? "👛" : "✉️"}
                           </div>
-                          {/* Identifier — click to copy full value */}
+                          {/* Identifier */}
                           <span title={fullId}
                             onClick={() => navigator.clipboard.writeText(fullId)}
-                            style={{ fontSize:isWallet?12:13, fontFamily:isWallet?"monospace":"DM Sans",
-                              color:V.text, cursor:"pointer", flex:1, overflow:"hidden",
-                              textOverflow:"ellipsis", whiteSpace:"nowrap",
-                              textDecoration:"underline dotted" }}>
+                            style={{ fontSize:isWallet?12:13,
+                              fontFamily:isWallet?"monospace":"DM Sans",
+                              color:V.text, cursor:"pointer", flex:1,
+                              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                              textDecoration:"underline dotted", textUnderlineOffset:3 }}>
                             {dispId}
                           </span>
-                          {/* Ticket type badge on right */}
-                          <span style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700,
-                            color:ttColor, background:ttBg, borderRadius:6,
-                            padding:"2px 8px", flexShrink:0 }}>
-                            {ttName}
-                          </span>
-                          <span style={{ fontSize:10, color:V.mutedL, flexShrink:0, marginLeft:4 }}>
-                            {reg.submittedAt ? new Date(reg.submittedAt).toLocaleDateString() : ""}
-                          </span>
+                          {/* Right side: ticket type + check-in */}
+                          <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                            {/* Ticket type badge */}
+                            <span style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700,
+                              color:ttColor, background:ttBg, borderRadius:6,
+                              border:"1px solid "+ttBorder,
+                              padding:"2px 8px", display:"flex", alignItems:"center", gap:4 }}>
+                              {ttIcon} {ttName}
+                            </span>
+                            {/* Check-in status */}
+                            <span style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700,
+                              color:checkedIn?"#166534":"#6B7280",
+                              background:checkedIn?"#DCFCE7":"#F3F4F6",
+                              border:"1px solid "+(checkedIn?"#86EFAC":"#E5E7EB"),
+                              borderRadius:6, padding:"2px 8px",
+                              display:"flex", alignItems:"center", gap:3 }}>
+                              {checkedIn ? "✓ In" : "Pending"}
+                            </span>
+                          </div>
                         </div>
+                        {/* Extra fields row */}
                         {fieldCols.length > 0 && (
-                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:6 }}>
+                          <div style={{ display:"grid",
+                            gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",
+                            gap:6, padding:"8px 14px 10px" }}>
                             {fieldCols.map(col => reg[col] && (
                               <div key={col} style={{ background:"white", borderRadius:7, padding:"6px 9px" }}>
-                                <div style={{ fontSize:9, fontFamily:"Outfit", fontWeight:800, color:V.mutedL,
-                                  textTransform:"uppercase", letterSpacing:".07em", marginBottom:2 }}>{col}</div>
+                                <div style={{ fontSize:9, fontFamily:"Outfit", fontWeight:800,
+                                  color:V.mutedL, textTransform:"uppercase",
+                                  letterSpacing:".07em", marginBottom:2 }}>{col}</div>
                                 <div style={{ fontSize:12, color:V.text, wordBreak:"break-word" }}>{reg[col]}</div>
                               </div>
                             ))}

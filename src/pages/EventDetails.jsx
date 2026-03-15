@@ -17,12 +17,6 @@ function calendarDays(startTs, endTs) {
   return Math.round((e - s) / 86400000) + 1;
 }
 
-function ticketTypeBadgeStyle(type) {
-  if (!type || type === "Regular") return { background:"rgba(0,196,138,.18)", color:"#007050" };
-  if (type === "VIP")     return { background:"rgba(217,119,6,.18)", color:"#92400E" };
-  if (type === "Sponsor") return { background:"rgba(109,40,217,.18)", color:"#5B21B6" };
-  return { background:"rgba(0,0,0,.1)", color:"#374151" };
-}
 
 // ── Guest data form step ──────────────────────────────────────────────────────
 function GuestDataForm({ event, identifier, onSubmit, onBack }) {
@@ -443,35 +437,50 @@ function PurchaseCard({ event, totalSold, wallet, connect, connecting, buying, b
 
       <div style={{padding:24}}>
         {/* Price block */}
-        <div style={{textAlign:"center",paddingBottom:18,borderBottom:"1px solid "+V.borderS,marginBottom:18}}>
+        <div style={{paddingBottom:18,borderBottom:"1px solid "+V.borderS,marginBottom:18}}>
           {hasMultipleTypes ? (
             <div>
-              <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:28,color:V.text,marginBottom:4}}>
-                Multiple Tiers
+              <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:12,color:V.muted,
+                textTransform:"uppercase",letterSpacing:".08em",marginBottom:10}}>
+                Available Ticket Tiers
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
-                {enabledTypes.map(tt => (
-                  <div key={tt.name} style={{display:"flex",justifyContent:"space-between",
-                    alignItems:"center",background:V.surface,borderRadius:9,padding:"8px 12px"}}>
-                    <span style={{fontFamily:"Outfit",fontWeight:700,fontSize:13,color:V.text}}>{tt.name}</span>
-                    <span style={{fontFamily:"Outfit",fontWeight:700,fontSize:13,
-                      color:!tt.price||tt.price==="0"?"#16A34A":V.brand}}>
-                      {!tt.price||tt.price==="0" ? "Free" : `${tt.price} OG`}
-                    </span>
-                  </div>
-                ))}
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {enabledTypes.map(tt => {
+                  const isFreeType = !tt.price || tt.price === "0";
+                  const isVIP = tt.name === "VIP";
+                  const isSponsor = tt.name === "Sponsor";
+                  const accent = isVIP ? "#D97706" : isSponsor ? V.brand : "#16A34A";
+                  const accentBg = isVIP ? "#FFFBEB" : isSponsor ? V.b50 : "#F0FDF4";
+                  const accentBorder = isVIP ? "#FDE68A" : isSponsor ? V.b100 : "#BBF7D0";
+                  return (
+                    <div key={tt.name} style={{display:"flex",alignItems:"center",gap:12,
+                      background:accentBg,borderRadius:12,padding:"11px 14px",
+                      border:`1.5px solid ${accentBorder}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:14,color:V.text}}>{tt.name}</div>
+                        {isVIP && <div style={{fontSize:11,color:"#92400E",fontWeight:500}}>Premium access</div>}
+                        {isSponsor && <div style={{fontSize:11,color:"#5B21B6",fontWeight:500}}>Top-tier sponsor</div>}
+                        {!isVIP && !isSponsor && <div style={{fontSize:11,color:"#166534",fontWeight:500}}>General admission</div>}
+                      </div>
+                      <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,
+                        color:isFreeType?"#16A34A":accent,textAlign:"right"}}>
+                        {isFreeType ? "Free" : `${tt.price} OG`}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : allFree ? (
-            <>
+            <div style={{textAlign:"center"}}>
               <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:42,color:"#16A34A",letterSpacing:"-.02em"}}>Free</div>
               <div style={{fontSize:12,color:V.muted,marginTop:2}}>No cost to attend</div>
-            </>
+            </div>
           ) : (
-            <>
+            <div style={{textAlign:"center"}}>
               <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:42,color:V.text,letterSpacing:"-.02em"}}>${event.ticketPriceUSD}</div>
               <div style={{fontSize:13,color:V.muted,marginTop:3}}>≈ {event.ticketPrice} OG tokens</div>
-            </>
+            </div>
           )}
         </div>
 
@@ -907,26 +916,39 @@ export default function EventDetailsPage({ onTicketBought }) {
 
                 {/* Ticket types breakdown */}
                 {hasMultipleTypes && (
-                  <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-                    <div style={{width:34,height:34,borderRadius:10,background:V.b50,
-                      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                      <Tag size={14} color={V.brand}/>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:V.muted,
-                        textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>Ticket Types</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                        {event.ticketTypes.filter(t=>t.enabled!==false).map(tt=>(
-                          <div key={tt.name} style={{display:"flex",justifyContent:"space-between",
-                            alignItems:"center",background:V.surface,borderRadius:8,padding:"7px 10px"}}>
-                            <span style={{fontFamily:"Outfit",fontWeight:700,fontSize:13,color:V.text}}>{tt.name}</span>
-                            <span style={{...ticketTypeBadgeStyle(tt.name),fontSize:12,fontFamily:"Outfit",
-                              fontWeight:700,padding:"2px 9px",borderRadius:20}}>
-                              {!tt.price||tt.price==="0"?"Free":`${tt.price} OG`}
-                            </span>
+                  <div>
+                    <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:V.muted,
+                      textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Ticket Types</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
+                      {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
+                        const isVIP     = tt.name === "VIP";
+                        const isSponsor = tt.name === "Sponsor";
+                        const isFreeT   = !tt.price || tt.price === "0";
+                        const grad = isVIP
+                          ? "linear-gradient(135deg,#D97706,#92400E)"
+                          : isSponsor
+                          ? "linear-gradient(135deg,#7C3AED,#2563EB)"
+                          : "linear-gradient(135deg,#059669,#047857)";
+                        return (
+                          <div key={tt.name} style={{borderRadius:14,overflow:"hidden",
+                            boxShadow:"0 2px 10px rgba(0,0,0,.08)"}}>
+                            <div style={{background:grad,padding:"12px 14px 10px"}}>
+                              <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:14,color:"white"}}>
+                                {tt.name}
+                              </div>
+                            </div>
+                            <div style={{background:"white",padding:"10px 14px",
+                              borderLeft:"1px solid "+V.borderS,borderRight:"1px solid "+V.borderS,
+                              borderBottom:"1px solid "+V.borderS,borderRadius:"0 0 14px 14px"}}>
+                              <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,
+                                color:isFreeT?"#16A34A":V.text}}>
+                                {isFreeT ? "Free" : `${tt.price} OG`}
+                              </div>
+                              <div style={{fontSize:11,color:V.mutedL,marginTop:1}}>per ticket</div>
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

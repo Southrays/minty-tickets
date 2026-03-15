@@ -42,12 +42,14 @@ async function verifyAndCheckIn(tokenId, eventId, organizerAddress) {
     const wc = await getWriteContract();
     const tx = await wc.organizerCheckIn(tokenId);
     await tx.wait();
+    // Update Redis so dashboard guests tab shows ✓ In
+    fetch("/api/mark-checkedin", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ eventId: String(eventId), identifier: owner }),
+    }).catch(()=>{});
     return {
-      ok: true,
-      tokenId,
-      owner: shortAddr(owner),
-      txHash: tx.hash,
-      method: "organizerCheckIn",
+      ok: true, tokenId, owner: shortAddr(owner),
+      txHash: tx.hash, method: "organizerCheckIn",
     };
   } catch (orgErr) {
     // organizerCheckIn failed — try syncOfflineCheckIns as fallback
