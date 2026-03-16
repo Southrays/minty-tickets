@@ -435,7 +435,6 @@ export default function DashboardPage() {
 
   const loadBalance = useCallback(async () => {
     if (!wallet) return;
-    setBalance(null);
     const b = await getOrganizerBalance(wallet);
     setBalance(b);
   }, [wallet]);
@@ -447,12 +446,25 @@ export default function DashboardPage() {
     setEmailCounts(Object.fromEntries(pairs));
   }, [orgEvents]);
 
+
+
   useEffect(() => { loadBalance(); }, [loadBalance]);
   useEffect(() => { loadEmailCounts(); }, [loadEmailCounts]);
 
   const totTix = orgEvents.reduce((a,e) => a + e.soldTickets + (e.acceptsOffchainTickets?(emailCounts[e.id]||0):0), 0);
-  const totRev = orgEvents.reduce((a,e) => a + parseFloat(e.ticketPrice||0)*e.soldTickets, 0);
-  const hasBalance = balance !== null && parseFloat(balance) > 0;
+
+  // Revenue from on-chain NFT ticket sales (price × sold count per event)
+  const totRev = orgEvents.reduce((a, e) => {
+    if (!e.soldTickets) return a;
+    const price = parseFloat(e.ticketPrice || 0);
+    return a + price * e.soldTickets;
+  }, 0);
+
+  const balanceNum    = parseFloat(balance || 0);
+  const hasBalance    = balance !== null && balance !== "unsupported" && balanceNum > 0;
+  const balanceDisplay = balance === null          ? "…"
+                       : balance === "unsupported" ? "N/A"
+                       : `${balanceNum.toFixed(4)} OG`;
 
   const doWithdraw = async () => {
     setWdBusy(true); setWdErr(""); setWdDone(false);
@@ -540,10 +552,10 @@ export default function DashboardPage() {
       {/* Stat cards */}
       <div className="fu2" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:14, marginBottom:24 }}>
         {[
-          { label:"Total Earned",   value:`${totRev.toFixed(4)} OG`,       sub:"from NFT tickets", I:TrendingUp, c:V.brand },
-          { label:"Available",      value:balance===null?"…":balance==="unsupported"?"—":`${parseFloat(balance||0).toFixed(4)} OG`, sub:"ready to withdraw", I:DollarSign, c:"#16A34A" },
-          { label:"Tickets Sold",   value:totTix.toLocaleString(),          sub:"NFT + email",      I:Ticket,    c:"#0EA5E9" },
-          { label:"Events Hosted",  value:orgEvents.length,                 sub:"on 0G chain",      I:Calendar,  c:"#D97706" },
+          { label:"Total Earned",  value:`${totRev.toFixed(4)} OG`,       sub:"from NFT tickets",   I:TrendingUp, c:V.brand    },
+          { label:"Available",     value:balanceDisplay,                   sub:"ready to withdraw",  I:DollarSign, c:"#16A34A"  },
+          { label:"Tickets Sold",  value:totTix.toLocaleString(),          sub:"NFT + email",        I:Ticket,     c:"#0EA5E9"  },
+          { label:"Events Hosted", value:orgEvents.length,                 sub:"on 0G chain",        I:Calendar,   c:"#D97706"  },
         ].map(({label,value,sub,I,c})=>(
           <div key={label} className="sc">
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>

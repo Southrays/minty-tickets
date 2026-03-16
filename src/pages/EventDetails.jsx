@@ -17,13 +17,6 @@ function calendarDays(startTs, endTs) {
   return Math.round((e - s) / 86400000) + 1;
 }
 
-function ticketTypeBadgeStyle(type) {
-  if (!type || type === "Regular") return { background:"rgba(0,196,138,.18)", color:"#007050" };
-  if (type === "VIP")     return { background:"rgba(217,119,6,.18)", color:"#92400E" };
-  if (type === "Sponsor") return { background:"rgba(109,40,217,.18)", color:"#5B21B6" };
-  return { background:"rgba(0,0,0,.1)", color:"#374151" };
-}
-
 // ── Guest data form step ──────────────────────────────────────────────────────
 function GuestDataForm({ event, identifier, onSubmit, onBack }) {
   const rf = event.requiredFields || {};
@@ -113,15 +106,22 @@ function GuestDataForm({ event, identifier, onSubmit, onBack }) {
 // ── Full ticket acquisition modal ─────────────────────────────────────────────
 // Steps: typeSelect → guestData (if needed) → choose (if free+offchain) → email → sent
 function TicketModal({ event, onWallet, onClose, onEmailSent }) {
-  const hasMultipleTypes = event.ticketTypes && event.ticketTypes.filter(t=>t.enabled!==false).length > 1;
-  const enabledTypes     = hasMultipleTypes ? event.ticketTypes.filter(t=>t.enabled!==false) : null;
-  const hasGuestData     = event.requiredFields &&
+  const hasMultipleTypes    = event.ticketTypes && event.ticketTypes.filter(t=>t.enabled!==false).length > 1;
+  const enabledTypes        = hasMultipleTypes ? event.ticketTypes.filter(t=>t.enabled!==false) : null;
+  const hasGuestData        = event.requiredFields &&
     Object.entries(event.requiredFields).some(([k,v]) => k!=="customQuestion" && v === true);
+  const acceptsEmail        = event.acceptsOffchainTickets === true;
 
-  // Start at typeSelect if multiple types, else skip to guestData or choose
-  const firstStep = hasMultipleTypes ? "typeSelect"
-    : hasGuestData ? "guestData"
-    : "choose";
+  // Determine first step:
+  // - multiple types → typeSelect
+  // - guest data required → guestData
+  // - free event that accepts email → choose (wallet or email)
+  // - everything else → go straight to wallet (no modal needed, handled by handleClaim)
+  const isFreeEvent  = !event.ticketPrice || event.ticketPrice === "0";
+  const firstStep    = hasMultipleTypes ? "typeSelect"
+    : hasGuestData                      ? "guestData"
+    : (isFreeEvent && acceptsEmail)     ? "choose"
+    : "wallet"; // paid event or no email → skip directly
 
   const [step,       setStep]      = useState(firstStep);
   const [selType,    setSelType]   = useState(enabledTypes?.[0] || null);
@@ -131,17 +131,22 @@ function TicketModal({ event, onWallet, onClose, onEmailSent }) {
   const [sent,       setSent]      = useState(false);
   const [emailErr,   setEmailErr]  = useState("");
 
+  // If no modal needed (paid, no email, no guest data, no multi-type) → fire wallet immediately
+  useEffect(() => {
+    if (firstStep === "wallet") { onWallet(null, null); onClose(); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isFreeType = !selType?.price || selType?.price === "0";
 
   const afterTypeSelect = () => {
     if (hasGuestData) setStep("guestData");
-    else if (isFreeType && event.acceptsOffchainTickets) setStep("choose");
+    else if (isFreeType && acceptsEmail) setStep("choose");
     else { onWallet(selType?.name); onClose(); }
   };
 
   const afterGuestData = (data) => {
     setGuestData(data);
-    if (isFreeType && event.acceptsOffchainTickets) setStep("choose");
+    if (isFreeType && acceptsEmail) setStep("choose");
     else { onWallet(selType?.name, data); onClose(); }
   };
 
@@ -931,8 +936,6 @@ export default function EventDetailsPage({ onTicketBought }) {
                       textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Ticket Types</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
                       {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
-                        const isVIP     = tt.name === "VIP";
-                        const isSponsor = tt.name === "Sponsor";
                         const isFreeT   = !tt.price || tt.price === "0";
                         return (
                           <div key={tt.name} style={{borderRadius:12,overflow:"hidden",

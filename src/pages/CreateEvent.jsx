@@ -527,13 +527,17 @@ function ScheduleSection({ form, setF, errs }) {
 
 // ── Ticket types ─────────────────────────────────────────────────────────────
 function TicketTypesSection({ form, setF, errs }) {
-  const isFree = !form.ticketTypes || form.ticketTypes.every(t => !t.price || t.price === "0");
 
-  const updateTypePrice = (name, price) =>
-    setF(f => ({ ...f, ticketTypes: f.ticketTypes.map(t => t.name===name?{...t,price}:t) }));
+  const updateType = (name, field, val) =>
+    setF(f => ({ ...f, ticketTypes: f.ticketTypes.map(t => t.name===name ? {...t,[field]:val} : t) }));
 
   const toggleType = (name, on) =>
-    setF(f => ({ ...f, ticketTypes: f.ticketTypes.map(t => t.name===name?{...t,enabled:on}:t) }));
+    setF(f => ({ ...f, ticketTypes: f.ticketTypes.map(t => t.name===name ? {...t,enabled:on} : t) }));
+
+  const enabledTypes = form.ticketTypes.filter(t => t.enabled !== false);
+
+  // Auto-compute maxTickets from sum of enabled supplies
+  const computedMax = enabledTypes.reduce((a, t) => a + (parseInt(t.supply || 0)), 0);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
@@ -552,101 +556,109 @@ function TicketTypesSection({ form, setF, errs }) {
             setF(f => ({
               ...f, useMultipleTypes:val,
               ticketTypes: val
-                ? TICKET_TYPES_LIST.map((n,i) => ({ name:n, enabled:i===0, price:i===0?f.basePrice:"" }))
-                : [{ name:"Regular", enabled:true, price:f.basePrice||"" }],
+                ? TICKET_TYPES_LIST.map((n,i) => ({ name:n, enabled:i===0, price:i===0?f.basePrice:"", supply:i===0?f.maxTickets:"" }))
+                : [{ name:"Regular", enabled:true, price:f.basePrice||"", supply:f.maxTickets||"500" }],
             }))}/>
         </div>
 
         {form.useMultipleTypes && (
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {/* Header */}
+            <div style={{ display:"grid", gridTemplateColumns:"20px 80px 1fr 1fr", gap:12,
+              padding:"0 14px", marginBottom:2 }}>
+              <div/>
+              <div style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700, color:V.mutedL, textTransform:"uppercase" }}>Type</div>
+              <div style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700, color:V.mutedL, textTransform:"uppercase" }}>Price (OG)</div>
+              <div style={{ fontSize:11, fontFamily:"Outfit", fontWeight:700, color:V.mutedL, textTransform:"uppercase" }}>Supply</div>
+            </div>
             {form.ticketTypes.map((tt, i) => (
-              <div key={tt.name} style={{ display:"flex", alignItems:"center", gap:12,
-                background:"white", borderRadius:11, padding:"12px 14px",
+              <div key={tt.name} style={{ display:"grid", gridTemplateColumns:"20px 80px 1fr 1fr",
+                alignItems:"center", gap:12, background:"white", borderRadius:11, padding:"12px 14px",
                 border:"2px solid "+(tt.enabled?V.b100:V.borderS), transition:"border .2s" }}>
                 {i === 0 ? (
-                  <div style={{ width:20, height:20, borderRadius:6, background:V.brand+"20",
+                  <div style={{ width:18, height:18, borderRadius:5, background:V.brand+"20",
                     display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <CheckCircle size={12} color={V.brand}/>
+                    <CheckCircle size={11} color={V.brand}/>
                   </div>
                 ) : (
                   <input type="checkbox" checked={tt.enabled}
                     onChange={e => toggleType(tt.name, e.target.checked)}
-                    style={{ accentColor:V.brand, width:17, height:17,
-                      cursor:"pointer", flexShrink:0 }}/>
+                    style={{ accentColor:V.brand, width:16, height:16, cursor:"pointer" }}/>
                 )}
-                <span style={{ fontFamily:"Outfit", fontWeight:700, fontSize:14,
-                  color:V.text, minWidth:70 }}>
+                <span style={{ fontFamily:"Outfit", fontWeight:700, fontSize:13, color:tt.enabled?V.text:V.mutedL }}>
                   {tt.name}
-                  {tt.name==="Regular" && (
-                    <span style={{ fontSize:10, color:V.mutedL, fontWeight:400, marginLeft:5 }}>
-                      (base)
-                    </span>
-                  )}
                 </span>
-                <div style={{ flex:1, position:"relative" }}>
-                  <input className="inp" placeholder={tt.enabled?"Price in OG (0 = free)":"—"}
-                    type="number" min="0" step="0.001"
+                {/* Price */}
+                <div style={{ position:"relative" }}>
+                  <input className="inp" type="number" min="0" step="0.001"
+                    placeholder={tt.enabled ? "0 = free, e.g. 0.5" : "—"}
                     disabled={!tt.enabled}
                     value={tt.price}
-                    onChange={e => updateTypePrice(tt.name, e.target.value)}
-                    style={{ paddingRight: tt.price&&tt.price!=="0"?110:14,
-                      opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none" }}/>
-                  {tt.enabled && tt.price && tt.price!=="0" && (
-                    <span style={{ position:"absolute", right:12, top:"50%",
-                      transform:"translateY(-50%)", fontSize:11, color:V.mutedL,
+                    onChange={e => updateType(tt.name, "price", e.target.value)}
+                    style={{ opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none",
+                      paddingRight: tt.price && tt.price!=="0" ? 90 : 14 }}/>
+                  {tt.enabled && tt.price && parseFloat(tt.price) > 0 && (
+                    <span style={{ position:"absolute", right:8, top:"50%",
+                      transform:"translateY(-50%)", fontSize:10, color:V.mutedL,
                       fontFamily:"Outfit", fontWeight:600 }}>
                       ≈${(parseFloat(tt.price||0)*OG_TO_USD_RATE).toFixed(2)}
                     </span>
                   )}
                 </div>
-                {tt.enabled && (!tt.price||tt.price==="0") && (
-                  <span style={{ fontSize:11, color:"#16A34A", fontFamily:"Outfit",
-                    fontWeight:700, flexShrink:0 }}>FREE</span>
-                )}
+                {/* Supply */}
+                <input className="inp" type="number" min="1" step="1"
+                  placeholder={tt.enabled ? "e.g. 100" : "—"}
+                  disabled={!tt.enabled}
+                  value={tt.supply}
+                  onChange={e => updateType(tt.name, "supply", e.target.value)}
+                  style={{ opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none" }}/>
               </div>
             ))}
+            {/* Auto-computed total */}
+            {computedMax > 0 && (
+              <div style={{ fontSize:12, color:V.muted, textAlign:"right", marginTop:4,
+                fontFamily:"Outfit", fontWeight:600 }}>
+                Total supply: <strong style={{ color:V.text }}>{computedMax.toLocaleString()}</strong> tickets
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Single price */}
+      {/* Single type — price + supply */}
       {!form.useMultipleTypes && (
-        <div>
-          <Lbl hint="Leave empty or 0 for a free event">Ticket Price (OG tokens)</Lbl>
-          <div style={{ position:"relative" }}>
-            <input className="inp" placeholder="0 — free event" type="number"
-              min="0" step="0.001" value={form.basePrice}
-              onChange={e => {
-                const p = e.target.value;
-                setF(f => ({ ...f, basePrice:p,
-                  ticketTypes:[{ name:"Regular", enabled:true, price:p }] }));
-              }}
-              style={{ paddingRight: form.basePrice&&form.basePrice!=="0"?110:14 }}/>
-            {form.basePrice && form.basePrice!=="0" && (
-              <span style={{ position:"absolute", right:12, top:"50%",
-                transform:"translateY(-50%)", fontSize:11, color:V.mutedL,
-                fontFamily:"Outfit", fontWeight:600 }}>
-                ≈${(parseFloat(form.basePrice||0)*OG_TO_USD_RATE).toFixed(2)} USD
-              </span>
-            )}
-          </div>
-          {isFree && (
-            <div style={{ fontSize:12, color:"#16A34A", marginTop:7,
-              display:"flex", alignItems:"center", gap:4 }}>
-              <CheckCircle size={12}/>This event is free
+        <>
+          <div>
+            <Lbl hint="Leave empty or 0 for a free event">Ticket Price (OG tokens)</Lbl>
+            <div style={{ position:"relative" }}>
+              <input className="inp" placeholder="e.g. 0.5" type="number"
+                min="0.001" step="0.001" value={form.basePrice}
+                onChange={e => {
+                  const p = e.target.value;
+                  setF(f => ({ ...f, basePrice:p,
+                    ticketTypes:[{ name:"Regular", enabled:true, price:p, supply:f.maxTickets||"500" }] }));
+                }}
+                style={{ paddingRight: form.basePrice&&parseFloat(form.basePrice)>0 ? 110 : 14 }}/>
+              {form.basePrice && parseFloat(form.basePrice) > 0 && (
+                <span style={{ position:"absolute", right:12, top:"50%",
+                  transform:"translateY(-50%)", fontSize:11, color:V.mutedL,
+                  fontFamily:"Outfit", fontWeight:600 }}>
+                  ≈${(parseFloat(form.basePrice||0)*OG_TO_USD_RATE).toFixed(2)} USD
+                </span>
+              )}
             </div>
-          )}
-        </div>
+            <Err msg={errs?.basePrice}/>
+          </div>
+          <div>
+            <Lbl req>Ticket Supply</Lbl>
+            <input className="inp" placeholder="e.g. 500" type="number" min="1"
+              value={form.maxTickets}
+              onChange={e => setF(f => ({ ...f, maxTickets:e.target.value,
+                ticketTypes:[{ name:"Regular", enabled:true, price:f.basePrice||"", supply:e.target.value }] }))}/>
+            <Err msg={errs?.maxTickets}/>
+          </div>
+        </>
       )}
-
-      {/* Max tickets */}
-      <div>
-        <Lbl req>Max Ticket Supply</Lbl>
-        <input className="inp" placeholder="e.g. 500" type="number" min="1"
-          value={form.maxTickets}
-          onChange={e => setF(f => ({ ...f, maxTickets:e.target.value }))}/>
-        <Err msg={errs?.maxTickets}/>
-      </div>
     </div>
   );
 }
@@ -987,7 +999,7 @@ const INIT = {
   days:[{ date:null, startTime:null, endTime:null }],
   useMultipleTypes:false,
   basePrice:"",
-  ticketTypes:[{ name:"Regular", enabled:true, price:"" }],
+  ticketTypes:[{ name:"Regular", enabled:true, price:"", supply:"500" }],
   maxTickets:"500",
   acceptsOffchain:false,
   collectGuestData:false,
@@ -1039,7 +1051,13 @@ export default function CreateEventPage({ onCreated }) {
     if (!form.days[0]?.startTime)      e.schedule  = (e.schedule||"") || "Start time is required.";
     if (!form.days[0]?.endTime)        e.schedule  = (e.schedule||"") || "End time is required.";
     if (!form.maxTickets || parseInt(form.maxTickets) < 1)
-      e.maxTickets = "Enter max ticket supply (at least 1).";
+      e.maxTickets = "Enter ticket supply (at least 1).";
+    // Validate supply per type (price 0 = free tier, which is now valid)
+    const enabledTypes = form.ticketTypes.filter(t => t.enabled !== false);
+    enabledTypes.forEach(t => {
+      if (!t.supply || parseInt(t.supply) < 1)
+        e.maxTickets = `${t.name} ticket supply must be at least 1.`;
+    });
     setE(e);
     return Object.keys(e).length === 0;
   };
