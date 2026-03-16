@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
   if (!eventId || !identifier) return res.status(400).json({ error: "eventId and identifier required" });
 
   try {
-    const key      = `reg:${eventId}:${identifier.toLowerCase().trim()}`;
+    const key      = `reg:0xcdD5f72:${eventId}:${identifier.toLowerCase().trim()}`;
     const existing = await redis(["GET", key]);
     if (existing) {
       let data;

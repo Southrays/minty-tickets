@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
     const r    = await fetch(url, {
       method:  "POST",
       headers: { Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
-      body:    JSON.stringify(["GET", `ticket:emailcount:${eventId}`]),
+      body:    JSON.stringify(["GET", `ticket:emailcount:0xcdD5f72:${eventId}`]),
     });
     const json = await r.json();
     const count = parseInt(json.result || "0", 10);

@@ -175,8 +175,8 @@ function EventAnalyticsModal({ event, onClose }) {
   useEffect(() => {
     (async () => {
       const [ec, rs] = await Promise.all([
-        fetchEmailCount(event.id),
-        fetchRegistrations(event.id),   // always fetch — email + wallet buyers both register
+        event.acceptsOffchainTickets ? fetchEmailCount(event.id) : Promise.resolve(0),
+        fetchRegistrations(event.id),
       ]);
       setEmailCount(ec);
       setRegs(rs);
@@ -453,12 +453,14 @@ export default function DashboardPage() {
 
   const totTix = orgEvents.reduce((a,e) => a + e.soldTickets + (e.acceptsOffchainTickets?(emailCounts[e.id]||0):0), 0);
 
-  // Revenue from on-chain NFT ticket sales (price × sold count per event)
+  // Revenue: sum across events using base price from first ticket tier in metadata
+  // soldTickets is total on-chain purchases — best estimate without per-tier sold breakdown
   const totRev = orgEvents.reduce((a, e) => {
     if (!e.soldTickets) return a;
-    const price = parseFloat(e.ticketPrice || 0);
+    const price = parseFloat(e.ticketPrice || 0); // ticketPrice = first tier price from metadata
     return a + price * e.soldTickets;
   }, 0);
+  const totRevDisplay = `${totRev.toFixed(4)} OG`;
 
   const balanceNum    = parseFloat(balance || 0);
   const hasBalance    = balance !== null && balance !== "unsupported" && balanceNum > 0;
@@ -552,7 +554,7 @@ export default function DashboardPage() {
       {/* Stat cards */}
       <div className="fu2" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:14, marginBottom:24 }}>
         {[
-          { label:"Total Earned",  value:`${totRev.toFixed(4)} OG`,       sub:"from NFT tickets",   I:TrendingUp, c:V.brand    },
+          { label:"Total Earned",  value:totRevDisplay,                       sub:"from NFT tickets",   I:TrendingUp, c:V.brand    },
           { label:"Available",     value:balanceDisplay,                   sub:"ready to withdraw",  I:DollarSign, c:"#16A34A"  },
           { label:"Tickets Sold",  value:totTix.toLocaleString(),          sub:"NFT + email",        I:Ticket,     c:"#0EA5E9"  },
           { label:"Events Hosted", value:orgEvents.length,                 sub:"on 0G chain",        I:Calendar,   c:"#D97706"  },

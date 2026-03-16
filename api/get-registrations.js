@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
 
   try {
     // Step 1: get all registered identifiers for this event
-    const identifiers = await r(["SMEMBERS", `reglist:${eventId}`]);
+    const identifiers = await r(["SMEMBERS", `reglist:0xcdD5f72:${eventId}`]);
     console.log(`[get-regs] eventId=${eventId} identifiers=`, JSON.stringify(identifiers));
 
     if (!identifiers || !Array.isArray(identifiers) || identifiers.length === 0)
@@ -44,7 +44,7 @@ module.exports = async function handler(req, res) {
     // Step 2: fetch each registration record individually
     const registrations = [];
     for (const id of identifiers) {
-      const raw = await r(["GET", `reg:${eventId}:${id}`]);
+      const raw = await r(["GET", `reg:0xcdD5f72:${eventId}:${id}`]);
       console.log(`[get-regs] GET reg:${eventId}:${id} →`, raw ? raw.slice(0, 80) : "null");
       if (!raw) continue;
       try {

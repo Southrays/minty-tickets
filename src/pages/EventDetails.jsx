@@ -611,12 +611,13 @@ export default function EventDetailsPage({ onTicketBought }) {
   }, [eventId]);
 
   useEffect(() => {
-    if (!eventId) return;
+    if (!eventId || !event) return;
+    if (!event.acceptsOffchainTickets) { setEmailTicketCount(0); return; }
     fetch(`/api/ticket-count?eventId=${eventId}`)
       .then(r => r.json())
       .then(d => setEmailTicketCount(d.emailCount || 0))
       .catch(() => {});
-  }, [eventId]);
+  }, [eventId, event]);
 
   useEffect(() => {
     const h = () => { if (heroRef.current) heroRef.current.style.transform = `translateY(${window.scrollY*.28}px)`; };

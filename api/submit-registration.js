@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "eventId, identifier, fields required" });
 
   const cleanId = identifier.toLowerCase().trim();
-  const key     = `reg:${eventId}:${cleanId}`;
+  const key     = `reg:0xcdD5f72:${eventId}:${cleanId}`;
   const data    = JSON.stringify({
     identifier,
     ticketType:  fields.ticketType || "Regular",
@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
   });
 
   await r(["SET",  key,                                       data    ]);
-  await r(["SADD", `reglist:${eventId}`, cleanId                      ]);
+  await r(["SADD", `reglist:0xcdD5f72:${eventId}`, cleanId                      ]);
   console.log(`[submit-reg] stored eventId=${eventId} identifier=${identifier}`);
 
   // Notify organizer

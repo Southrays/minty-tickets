@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
 
   // ── Dedup check ────────────────────────────────────────────────────────────
   const cleanEmail  = email.toLowerCase().trim();
-  const dedupKey    = `ticket:used:${eventId}:${cleanEmail}`;
+  const dedupKey    = `ticket:used:0xcdD5f72:${eventId}:${cleanEmail}`;
   const alreadyUsed = await r(["GET", dedupKey]);
   if (alreadyUsed) {
     return res.status(409).json({ error: "This email already has a ticket for this event." });
@@ -132,16 +132,16 @@ module.exports = async function handler(req, res) {
     submittedAt: Date.now(),
   });
 
-  const regKey = `reg:${eventId}:${cleanEmail}`;
+  const regKey = `reg:0xcdD5f72:${eventId}:${cleanEmail}`;
 
   // 1. Mark as used (dedup)
   await r(["SET", dedupKey, "1"]);
   // 2. Increment email ticket counter
-  await r(["INCR", `ticket:emailcount:${eventId}`]);
+  await r(["INCR", `ticket:emailcount:0xcdD5f72:${eventId}`]);
   // 3. Store registration record
   await r(["SET", regKey, regData]);
   // 4. Add email to the event's registration set
-  await r(["SADD", `reglist:${eventId}`, cleanEmail]);
+  await r(["SADD", `reglist:0xcdD5f72:${eventId}`, cleanEmail]);
 
   console.log(`[send-ticket] All Redis ops complete for ${cleanEmail} event=${eventId}`);
 
