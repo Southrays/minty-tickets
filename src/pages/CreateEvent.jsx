@@ -596,7 +596,8 @@ function TicketTypesSection({ form, setF, errs }) {
                     value={tt.price}
                     onChange={e => updateType(tt.name, "price", e.target.value)}
                     style={{ opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none",
-                      paddingRight: tt.price && tt.price!=="0" ? 90 : 14 }}/>
+                      paddingRight: tt.price && parseFloat(tt.price) > 0 ? 90 : 14,
+                      border: tt.enabled && (!tt.supply || parseInt(tt.supply) < 1) ? "1.5px solid #FCA5A5" : undefined }}/>
                   {tt.enabled && tt.price && parseFloat(tt.price) > 0 && (
                     <span style={{ position:"absolute", right:8, top:"50%",
                       transform:"translateY(-50%)", fontSize:10, color:V.mutedL,
@@ -606,12 +607,24 @@ function TicketTypesSection({ form, setF, errs }) {
                   )}
                 </div>
                 {/* Supply */}
-                <input className="inp" type="number" min="1" step="1"
-                  placeholder={tt.enabled ? "e.g. 100" : "—"}
-                  disabled={!tt.enabled}
-                  value={tt.supply}
-                  onChange={e => updateType(tt.name, "supply", e.target.value)}
-                  style={{ opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none" }}/>
+                <div>
+                  <input className="inp" type="number" min="1" step="1"
+                    placeholder={tt.enabled ? "e.g. 100" : "—"}
+                    disabled={!tt.enabled}
+                    value={tt.supply}
+                    onChange={e => updateType(tt.name, "supply", e.target.value)}
+                    style={{
+                      opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none",
+                      border: tt.enabled && (!tt.supply || parseInt(tt.supply) < 1)
+                        ? "1.5px solid #EF4444" : undefined,
+                    }}/>
+                  {tt.enabled && (!tt.supply || parseInt(tt.supply) < 1) && (
+                    <div style={{ fontSize:11, color:"#EF4444", marginTop:3,
+                      display:"flex", alignItems:"center", gap:3 }}>
+                      <AlertCircle size={10}/>Required
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {/* Auto-computed total */}

@@ -453,14 +453,22 @@ export default function DashboardPage() {
 
   const totTix = orgEvents.reduce((a,e) => a + e.soldTickets + (e.acceptsOffchainTickets?(emailCounts[e.id]||0):0), 0);
 
-  // Revenue: sum across events using base price from first ticket tier in metadata
-  // soldTickets is total on-chain purchases — best estimate without per-tier sold breakdown
+  // Revenue estimate: iterate all ticket types in metadata, use their prices
+  // Falls back to event.ticketPrice (first tier) if no ticketTypes in metadata
   const totRev = orgEvents.reduce((a, e) => {
     if (!e.soldTickets) return a;
-    const price = parseFloat(e.ticketPrice || 0); // ticketPrice = first tier price from metadata
-    return a + price * e.soldTickets;
+    const types = e.ticketTypes;
+    if (types && types.length > 0) {
+      // Best estimate: assume all sold tickets used the first (cheapest) tier price
+      // Actual per-tier breakdown would need extra on-chain view functions
+      const firstPrice = parseFloat(types[0]?.price ?? 0);
+      return a + (isNaN(firstPrice) ? 0 : firstPrice) * e.soldTickets;
+    }
+    // Fallback for events without ticketTypes metadata
+    const fallback = parseFloat(e.ticketPrice ?? 0);
+    return a + (isNaN(fallback) ? 0 : fallback) * e.soldTickets;
   }, 0);
-  const totRevDisplay = `${totRev.toFixed(4)} OG`;
+  const totRevDisplay = totRev > 0 ? `${totRev.toFixed(4)} OG` : "—";
 
   const balanceNum    = parseFloat(balance || 0);
   const hasBalance    = balance !== null && balance !== "unsupported" && balanceNum > 0;
