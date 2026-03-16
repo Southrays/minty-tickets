@@ -119,6 +119,22 @@ export default function TicketModal({ ticket, onClose }) {
   const priceLbl   = ev.ticketPrice === "0" || !ev.ticketPrice ? "FREE" : "$" + ev.ticketPriceUSD;
   const locationLine = [ev.venue, ev.city, ev.country].filter(Boolean).join(" · ");
 
+  // Ticket type from metadata
+  const ticketType = ticket.ticketMeta?.ticketType || "Regular";
+  const isVIP      = ticketType === "VIP";
+  const isSponsor  = ticketType === "Sponsor";
+
+  // Gradient per ticket type
+  const gradTop    = isVIP     ? "linear-gradient(160deg,#D97706 0%,#92400E 55%,#78350F 100%)"
+                   : isSponsor ? "linear-gradient(160deg,#7C3AED 0%,#4C1D95 55%,#2563EB 100%)"
+                   :             "linear-gradient(160deg,#00C48A 0%,#008F65 55%,#006B4D 100%)";
+  const gradPerf   = isVIP     ? "linear-gradient(160deg,#92400E,#78350F)"
+                   : isSponsor ? "linear-gradient(160deg,#4C1D95,#2563EB)"
+                   :             "linear-gradient(160deg,#008F65,#006B4D)";
+  const gradBottom = isVIP     ? "linear-gradient(160deg,#78350F,#451A03)"
+                   : isSponsor ? "linear-gradient(160deg,#2563EB,#1D4ED8)"
+                   :             "linear-gradient(160deg,#006B4D,#004D38)";
+
   return (
     <div className="mbd" onClick={e => e.target === e.currentTarget && onClose()}
       style={{position:"fixed",inset:0,background:"rgba(10,10,20,.75)",backdropFilter:"blur(20px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:20}}>
@@ -139,15 +155,13 @@ export default function TicketModal({ ticket, onClose }) {
             <div className="hs" style={{position:"absolute",inset:0,zIndex:4,pointerEvents:"none",opacity:.5,borderRadius:26}}/>
 
             {/* TOP: QR + identity */}
-            <div style={{background:"linear-gradient(160deg,#00C48A 0%,#008F65 55%,#006B4D 100%)",padding:"28px 26px 0",position:"relative"}}>
-              {[{top:-10,left:-10},{top:-10,right:-10}].map((s,i)=>(
-                <div key={i} style={{position:"absolute",width:20,height:20,borderRadius:"50%",background:"rgba(10,10,20,.75)",zIndex:5,...s}}/>
-              ))}
+            <div style={{background:gradTop,padding:"28px 26px 0",position:"relative"}}>
+
 
               {/* Title row */}
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
                 <div>
-                  <div style={{fontSize:9,fontFamily:"Outfit",fontWeight:800,letterSpacing:".15em",color:"rgba(255,255,255,.55)",textTransform:"uppercase",marginBottom:5}}>NFT TICKET</div>
+                  <div style={{fontSize:9,fontFamily:"Outfit",fontWeight:800,letterSpacing:".15em",color:"rgba(255,255,255,.55)",textTransform:"uppercase",marginBottom:5}}>{ticketType} TICKET</div>
                   <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:20,color:"white",lineHeight:1.15,maxWidth:280}}>{ev.name}</div>
                 </div>
                 <div style={{background:"rgba(0,0,0,.3)",borderRadius:9,padding:"4px 11px",flexShrink:0,marginLeft:12}}>
@@ -207,26 +221,23 @@ export default function TicketModal({ ticket, onClose }) {
             </div>
 
             {/* PERFORATION */}
-            <div style={{background:"linear-gradient(160deg,#008F65,#006B4D)",display:"flex",alignItems:"center",padding:"0 10px"}}>
+            <div style={{background:gradPerf,display:"flex",alignItems:"center",padding:"0 10px"}}>
               <div style={{position:"relative",width:"100%",height:0}}>
-                <div style={{position:"absolute",left:-16,top:"50%",transform:"translateY(-50%)",width:16,height:16,borderRadius:"50%",background:"rgba(10,10,20,.75)"}}/>
-                <div style={{position:"absolute",right:-16,top:"50%",transform:"translateY(-50%)",width:16,height:16,borderRadius:"50%",background:"rgba(10,10,20,.75)"}}/>
+
                 <div style={{width:"100%",height:0,borderTop:"2px dashed rgba(255,255,255,.3)"}}/>
               </div>
             </div>
 
             {/* BOTTOM: event details */}
-            <div style={{background:"linear-gradient(160deg,#006B4D,#004D38)",padding:"18px 26px 22px"}}>
-              {[{bottom:-10,left:-10},{bottom:-10,right:-10}].map((s,i)=>(
-                <div key={i} style={{position:"absolute",width:20,height:20,borderRadius:"50%",background:"rgba(10,10,20,.75)",zIndex:5,...s}}/>
-              ))}
+            <div style={{background:gradBottom,padding:"18px 26px 22px"}}>
+
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 18px",marginBottom:14}}>
                 {[
                   {l:"DATE",      v:formatDate(ev.startTime)},
                   {l:"TIME",      v:formatTime(ev.startTime)},
+                  {l:"TIER",      v:ticketType},
                   {l:"PRICE",     v:priceLbl},
-                  {l:"VALID FOR", v:"1 Attendee"},
                 ].map(({l,v})=>(
                   <div key={l}>
                     <div style={{fontSize:8,fontFamily:"Outfit",fontWeight:800,letterSpacing:".14em",color:"rgba(255,255,255,.45)",textTransform:"uppercase"}}>{l}</div>

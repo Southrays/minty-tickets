@@ -5,6 +5,7 @@ import {
   Wallet, ArrowLeft, Clock, Tag, Globe, ChevronRight, X,
 } from "lucide-react";
 import { V } from "../utils/constants";
+import { OG_TO_USD_RATE } from "../utils/constants";
 import { formatDate, formatTime, soldPct } from "../utils/format";
 import { useWallet } from "../context/WalletContext";
 import { useApp } from "../context/AppContext";
@@ -15,6 +16,13 @@ function calendarDays(startTs, endTs) {
   const s = new Date(startTs * 1000); s.setHours(0,0,0,0);
   const e = new Date(endTs   * 1000); e.setHours(0,0,0,0);
   return Math.round((e - s) / 86400000) + 1;
+}
+
+function ticketTypeBadgeStyle(type) {
+  if (!type || type === "Regular") return { background:"rgba(0,196,138,.18)", color:"#007050" };
+  if (type === "VIP")     return { background:"rgba(217,119,6,.18)", color:"#92400E" };
+  if (type === "Sponsor") return { background:"rgba(109,40,217,.18)", color:"#5B21B6" };
+  return { background:"rgba(0,0,0,.1)", color:"#374151" };
 }
 
 // ── Guest data form step ──────────────────────────────────────────────────────
@@ -475,9 +483,19 @@ function PurchaseCard({ event, totalSold, wallet, connect, connecting, buying, b
                         {isSponsor && <div style={{fontSize:11,color:"#5B21B6",fontWeight:500}}>Top-tier sponsor</div>}
                         {!isVIP && !isSponsor && <div style={{fontSize:11,color:"#166534",fontWeight:500}}>General admission</div>}
                       </div>
-                      <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,
-                        color:isFreeType?"#16A34A":accent,textAlign:"right"}}>
-                        {isFreeType ? "Free" : `${tt.price} OG`}
+                      <div style={{textAlign:"right"}}>
+                        {isFreeType ? (
+                          <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,color:"#16A34A"}}>Free</div>
+                        ) : (
+                          <>
+                            <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,color:accent}}>
+                              ${(parseFloat(tt.price||0)*OG_TO_USD_RATE).toFixed(2)}
+                            </div>
+                            <div style={{fontSize:11,color:accent,opacity:.75,marginTop:1}}>
+                              {tt.price} OG
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -491,8 +509,12 @@ function PurchaseCard({ event, totalSold, wallet, connect, connecting, buying, b
             </div>
           ) : (
             <div style={{textAlign:"center"}}>
-              <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:42,color:V.text,letterSpacing:"-.02em"}}>${event.ticketPriceUSD}</div>
-              <div style={{fontSize:13,color:V.muted,marginTop:3}}>≈ {event.ticketPrice} OG tokens</div>
+              <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:42,color:V.text,letterSpacing:"-.02em"}}>
+                ${event.ticketPriceUSD}
+              </div>
+              <div style={{fontSize:13,color:V.muted,marginTop:3}}>
+                {event.ticketPrice} OG
+              </div>
             </div>
           )}
         </div>
@@ -937,6 +959,8 @@ export default function EventDetailsPage({ onTicketBought }) {
                       textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Ticket Types</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
                       {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
+                        const isVIP     = tt.name === "VIP";
+                        const isSponsor = tt.name === "Sponsor";
                         const isFreeT   = !tt.price || tt.price === "0";
                         return (
                           <div key={tt.name} style={{borderRadius:12,overflow:"hidden",

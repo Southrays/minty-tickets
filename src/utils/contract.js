@@ -80,8 +80,9 @@ export function normaliseEvent(e) {
   // Derive display price from metadata ticketTypes (first enabled type)
   const metaTypes  = meta.ticketTypes || null;
   const firstType  = metaTypes?.[0];
-  const priceStr   = firstType?.price || "0";
-  const price      = parseFloat(priceStr) || 0;
+  const priceStr   = firstType?.price;
+  const parsedPrc  = parseFloat(priceStr);
+  const price      = isNaN(parsedPrc) ? 0 : parsedPrc;
 
   return {
     id:          Number(e.id),

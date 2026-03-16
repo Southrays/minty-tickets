@@ -555,9 +555,11 @@ function TicketTypesSection({ form, setF, errs }) {
           <Toggle on={form.useMultipleTypes} onChange={val =>
             setF(f => ({
               ...f, useMultipleTypes:val,
+              // Clear basePrice when switching to multiple types so email ticket logic isn't blocked
+              basePrice: val ? "" : f.basePrice,
               ticketTypes: val
-                ? TICKET_TYPES_LIST.map((n,i) => ({ name:n, enabled:i===0, price:i===0?f.basePrice:"", supply:i===0?f.maxTickets:"" }))
-                : [{ name:"Regular", enabled:true, price:f.basePrice||"", supply:f.maxTickets||"500" }],
+                ? TICKET_TYPES_LIST.map((n,i) => ({ name:n, enabled:i===0, price:"", supply:i===0?f.maxTickets:"" }))
+                : [{ name:"Regular", enabled:true, price:"", supply:f.maxTickets||"500" }],
             }))}/>
         </div>
 
@@ -775,7 +777,11 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
             overflow:"hidden", border:"2px solid #A3E635" }}>
             <img src={form.imagePreview} alt=""
               style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
-            <button onClick={() => setF(f=>({...f,imagePreview:null,imageFile:null}))}
+            <button onClick={() => {
+                setF(f=>({...f,imagePreview:null,imageFile:null}));
+                const inp = document.getElementById("imgup");
+                if (inp) inp.value = "";
+              }}
               style={{ position:"absolute", top:12, right:12,
                 background:"rgba(239,68,68,.9)", border:"none", borderRadius:9,
                 padding:"6px 11px", cursor:"pointer", display:"flex",
@@ -783,12 +789,7 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
                 fontSize:12, fontFamily:"Outfit", fontWeight:600 }}>
               <X size={12}/>Remove
             </button>
-            <div style={{ position:"absolute", bottom:12, left:12,
-              background:"rgba(0,0,0,.55)", borderRadius:7,
-              padding:"5px 11px", color:"white",
-              fontSize:11, fontFamily:"Outfit", fontWeight:600 }}>
-              ✓ Will upload when you create the event
-            </div>
+
           </div>
         ) : (
           <label htmlFor="imgup"
@@ -812,12 +813,7 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
         <input id="imgup" type="file" accept="image/*"
           style={{ display:"none" }} onChange={pickImage}/>
         {(uploadErr||errs.image) && <div data-field="image"><Err msg={uploadErr||errs.image}/></div>}
-        {uploading && (
-          <div style={{ display:"flex", alignItems:"center", gap:7,
-            marginTop:8, fontSize:13, color:V.brand }}>
-            <RefreshCw size={13} className="spin"/>Uploading image…
-          </div>
-        )}
+
       </section>
 
       {/* ─ Location ─ */}

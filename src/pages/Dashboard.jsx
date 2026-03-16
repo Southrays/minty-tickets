@@ -453,32 +453,20 @@ export default function DashboardPage() {
 
   const totTix = orgEvents.reduce((a,e) => a + e.soldTickets + (e.acceptsOffchainTickets?(emailCounts[e.id]||0):0), 0);
 
-  // Revenue estimate from metadata prices × on-chain soldTickets
+  // Revenue: e.ticketPrice is already correctly derived in normaliseEvent
+  // from metadata tier[0].price with isNaN guard
   const totRev = orgEvents.reduce((a, e) => {
     if (!e.soldTickets) return a;
-    const types = e.ticketTypes;
-    let price = 0;
-    if (types && types.length > 0) {
-      price = parseFloat(types[0]?.price ?? 0);
-    } else {
-      price = parseFloat(e.ticketPrice ?? 0);
-    }
-    return a + (isNaN(price) ? 0 : price) * e.soldTickets;
+    const p = parseFloat(e.ticketPrice);
+    return a + (isNaN(p) ? 0 : p) * e.soldTickets;
   }, 0);
+  const totRevDisplay = `${totRev.toFixed(4)} OG`;
 
-  // Available balance is always accurate (on-chain).
-  // Show revenue if we can calculate it; otherwise show available as the earned figure.
   const balanceNum    = parseFloat(balance || 0);
   const hasBalance    = balance !== null && balance !== "unsupported" && balanceNum > 0;
   const balanceDisplay = balance === null          ? "…"
                        : balance === "unsupported" ? "N/A"
                        : `${balanceNum.toFixed(4)} OG`;
-  // If metadata-derived revenue is 0 but balance>0, show balance as revenue hint
-  const totRevDisplay  = totRev > 0
-    ? `${totRev.toFixed(4)} OG`
-    : balanceNum > 0
-    ? `≥ ${balanceNum.toFixed(4)} OG`
-    : `0.0000 OG`;
 
   const doWithdraw = async () => {
     setWdBusy(true); setWdErr(""); setWdDone(false);
