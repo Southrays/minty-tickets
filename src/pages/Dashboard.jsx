@@ -453,28 +453,32 @@ export default function DashboardPage() {
 
   const totTix = orgEvents.reduce((a,e) => a + e.soldTickets + (e.acceptsOffchainTickets?(emailCounts[e.id]||0):0), 0);
 
-  // Revenue estimate: iterate all ticket types in metadata, use their prices
-  // Falls back to event.ticketPrice (first tier) if no ticketTypes in metadata
+  // Revenue estimate from metadata prices × on-chain soldTickets
   const totRev = orgEvents.reduce((a, e) => {
     if (!e.soldTickets) return a;
     const types = e.ticketTypes;
+    let price = 0;
     if (types && types.length > 0) {
-      // Best estimate: assume all sold tickets used the first (cheapest) tier price
-      // Actual per-tier breakdown would need extra on-chain view functions
-      const firstPrice = parseFloat(types[0]?.price ?? 0);
-      return a + (isNaN(firstPrice) ? 0 : firstPrice) * e.soldTickets;
+      price = parseFloat(types[0]?.price ?? 0);
+    } else {
+      price = parseFloat(e.ticketPrice ?? 0);
     }
-    // Fallback for events without ticketTypes metadata
-    const fallback = parseFloat(e.ticketPrice ?? 0);
-    return a + (isNaN(fallback) ? 0 : fallback) * e.soldTickets;
+    return a + (isNaN(price) ? 0 : price) * e.soldTickets;
   }, 0);
-  const totRevDisplay = totRev > 0 ? `${totRev.toFixed(4)} OG` : "—";
 
+  // Available balance is always accurate (on-chain).
+  // Show revenue if we can calculate it; otherwise show available as the earned figure.
   const balanceNum    = parseFloat(balance || 0);
   const hasBalance    = balance !== null && balance !== "unsupported" && balanceNum > 0;
   const balanceDisplay = balance === null          ? "…"
                        : balance === "unsupported" ? "N/A"
                        : `${balanceNum.toFixed(4)} OG`;
+  // If metadata-derived revenue is 0 but balance>0, show balance as revenue hint
+  const totRevDisplay  = totRev > 0
+    ? `${totRev.toFixed(4)} OG`
+    : balanceNum > 0
+    ? `≥ ${balanceNum.toFixed(4)} OG`
+    : `0.0000 OG`;
 
   const doWithdraw = async () => {
     setWdBusy(true); setWdErr(""); setWdDone(false);

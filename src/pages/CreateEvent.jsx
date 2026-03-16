@@ -520,7 +520,7 @@ function ScheduleSection({ form, setF, errs }) {
         </div>
       )}
 
-      <Err msg={errs?.schedule}/>
+      <span data-field="schedule"/><Err msg={errs?.schedule}/>
     </div>
   );
 }
@@ -596,8 +596,7 @@ function TicketTypesSection({ form, setF, errs }) {
                     value={tt.price}
                     onChange={e => updateType(tt.name, "price", e.target.value)}
                     style={{ opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none",
-                      paddingRight: tt.price && parseFloat(tt.price) > 0 ? 90 : 14,
-                      border: tt.enabled && (!tt.supply || parseInt(tt.supply) < 1) ? "1.5px solid #FCA5A5" : undefined }}/>
+                      paddingRight: tt.price && parseFloat(tt.price) > 0 ? 90 : 14 }}/>
                   {tt.enabled && tt.price && parseFloat(tt.price) > 0 && (
                     <span style={{ position:"absolute", right:8, top:"50%",
                       transform:"translateY(-50%)", fontSize:10, color:V.mutedL,
@@ -606,25 +605,17 @@ function TicketTypesSection({ form, setF, errs }) {
                     </span>
                   )}
                 </div>
-                {/* Supply */}
-                <div>
-                  <input className="inp" type="number" min="1" step="1"
-                    placeholder={tt.enabled ? "e.g. 100" : "—"}
-                    disabled={!tt.enabled}
-                    value={tt.supply}
-                    onChange={e => updateType(tt.name, "supply", e.target.value)}
-                    style={{
-                      opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none",
-                      border: tt.enabled && (!tt.supply || parseInt(tt.supply) < 1)
-                        ? "1.5px solid #EF4444" : undefined,
-                    }}/>
-                  {tt.enabled && (!tt.supply || parseInt(tt.supply) < 1) && (
-                    <div style={{ fontSize:11, color:"#EF4444", marginTop:3,
-                      display:"flex", alignItems:"center", gap:3 }}>
-                      <AlertCircle size={10}/>Required
-                    </div>
-                  )}
-                </div>
+                {/* Supply — red border only after submit attempt */}
+                <input className="inp" type="number" min="1" step="1"
+                  placeholder={tt.enabled ? "e.g. 100" : "—"}
+                  disabled={!tt.enabled}
+                  value={tt.supply}
+                  onChange={e => updateType(tt.name, "supply", e.target.value)}
+                  style={{
+                    opacity:tt.enabled?1:.4, pointerEvents:tt.enabled?"auto":"none",
+                    border: (errs?.maxTickets && tt.enabled && (!tt.supply || parseInt(tt.supply) < 1))
+                      ? "1.5px solid #EF4444" : undefined,
+                  }}/>
               </div>
             ))}
             {/* Auto-computed total */}
@@ -668,7 +659,7 @@ function TicketTypesSection({ form, setF, errs }) {
               value={form.maxTickets}
               onChange={e => setF(f => ({ ...f, maxTickets:e.target.value,
                 ticketTypes:[{ name:"Regular", enabled:true, price:f.basePrice||"", supply:e.target.value }] }))}/>
-            <Err msg={errs?.maxTickets}/>
+            <span data-field="maxTickets"/><Err msg={errs?.maxTickets}/>
           </div>
         </>
       )}
@@ -737,13 +728,13 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
       <section>
         <SectionHeader>Event Info</SectionHeader>
         <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-          <div>
+          <div data-field="name">
             <Lbl req>Event Name</Lbl>
             <input className="inp" placeholder="e.g. Neon Frequency Festival 2025"
               value={form.name} onChange={e => setF(f=>({...f,name:e.target.value}))}/>
             <Err msg={errs.name}/>
           </div>
-          <div>
+          <div data-field="shortDesc">
             <Lbl req>Short Description</Lbl>
             <input className="inp" placeholder="One-line summary shown on event cards"
               value={form.shortDescription}
@@ -820,7 +811,7 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
         )}
         <input id="imgup" type="file" accept="image/*"
           style={{ display:"none" }} onChange={pickImage}/>
-        {(uploadErr||errs.image) && <Err msg={uploadErr||errs.image}/>}
+        {(uploadErr||errs.image) && <div data-field="image"><Err msg={uploadErr||errs.image}/></div>}
         {uploading && (
           <div style={{ display:"flex", alignItems:"center", gap:7,
             marginTop:8, fontSize:13, color:V.brand }}>
@@ -838,7 +829,7 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
             <input className="inp" placeholder="e.g. Madison Square Garden"
               value={form.venue}
               onChange={e => setF(f=>({...f,venue:e.target.value}))}/>
-            <Err msg={errs.venue}/>
+            <span data-field="venue"/><Err msg={errs.venue}/>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
             <div>
@@ -852,7 +843,7 @@ function Step1({ form, setF, errs, uploadErr, setUploadErr, uploading }) {
                   country: c.country || f.country,
                 }))}
               />
-              <Err msg={errs.city}/>
+              <span data-field="city"/><Err msg={errs.city}/>
             </div>
             <div>
               <Lbl>State / Region</Lbl>
@@ -1075,7 +1066,34 @@ export default function CreateEventPage({ onCreated }) {
     return Object.keys(e).length === 0;
   };
 
-  const next = () => { if (validate1()) setStep(1); };
+  const formRef = useRef(null);
+
+  const next = () => {
+    const errsResult = {};
+    if (!form.name.trim())             errsResult.name      = true;
+    if (!form.shortDescription.trim()) errsResult.shortDesc = true;
+    if (!form.imageFile)               errsResult.image     = true;
+    if (!form.venue.trim())            errsResult.venue     = true;
+    if (!form.city.trim())             errsResult.city      = true;
+    const hasScheduleErr = !form.days[0]?.date || !form.days[0]?.startTime || !form.days[0]?.endTime;
+    if (hasScheduleErr)                errsResult.schedule  = true;
+    const enabledTypes = form.ticketTypes.filter(t => t.enabled !== false);
+    const hasSupplyErr = enabledTypes.some(t => !t.supply || parseInt(t.supply) < 1);
+    if (hasSupplyErr || !form.maxTickets || parseInt(form.maxTickets) < 1)
+      errsResult.maxTickets = true;
+
+    if (validate1()) { setStep(1); return; }
+
+    // Scroll to first error field using data-field attribute
+    const fieldOrder = ["name","shortDesc","image","venue","city","schedule","maxTickets"];
+    const firstErr = fieldOrder.find(k => errsResult[k]);
+    if (firstErr && formRef.current) {
+      const el = formRef.current.querySelector(`[data-field="${firstErr}"]`);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior:"smooth", block:"center" }), 50);
+      }
+    }
+  };
   const back = () => setStep(0);
 
   const submit = async () => {
@@ -1198,8 +1216,10 @@ export default function CreateEventPage({ onCreated }) {
         <StepBar step={step}/>
 
         {step === 0 && (
+          <div ref={formRef}>
           <Step1 form={form} setF={setF} errs={errs}
             uploadErr={uploadErr} setUploadErr={setUploadErr} uploading={uploading}/>
+          </div>
         )}
         {step === 1 && <Step2 form={form} setF={setF}/>}
 
