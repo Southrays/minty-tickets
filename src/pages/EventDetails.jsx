@@ -18,13 +18,6 @@ function calendarDays(startTs, endTs) {
   return Math.round((e - s) / 86400000) + 1;
 }
 
-function ticketTypeBadgeStyle(type) {
-  if (!type || type === "Regular") return { background:"rgba(0,196,138,.18)", color:"#007050" };
-  if (type === "VIP")     return { background:"rgba(217,119,6,.18)", color:"#92400E" };
-  if (type === "Sponsor") return { background:"rgba(109,40,217,.18)", color:"#5B21B6" };
-  return { background:"rgba(0,0,0,.1)", color:"#374151" };
-}
-
 // ── Guest data form step ──────────────────────────────────────────────────────
 function GuestDataForm({ event, identifier, onSubmit, onBack }) {
   const rf = event.requiredFields || {};
@@ -947,7 +940,7 @@ export default function EventDetailsPage({ onTicketBought }) {
                     <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:V.muted,
                       textTransform:"uppercase",letterSpacing:".07em"}}>Available</div>
                     <div style={{fontSize:14,color:V.text2,marginTop:2,fontFamily:"DM Sans"}}>
-                      {(event.maxTickets-event.soldTickets).toLocaleString()} of {event.maxTickets.toLocaleString()} tickets left
+                      {Math.max(0, event.maxTickets-event.soldTickets-emailTicketCount).toLocaleString()} of {event.maxTickets.toLocaleString()} tickets left
                     </div>
                   </div>
                 </div>
@@ -959,8 +952,6 @@ export default function EventDetailsPage({ onTicketBought }) {
                       textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Ticket Types</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
                       {event.ticketTypes.filter(t=>t.enabled!==false).map(tt => {
-                        const isVIP     = tt.name === "VIP";
-                        const isSponsor = tt.name === "Sponsor";
                         const isFreeT   = !tt.price || tt.price === "0";
                         return (
                           <div key={tt.name} style={{borderRadius:12,overflow:"hidden",
@@ -973,11 +964,16 @@ export default function EventDetailsPage({ onTicketBought }) {
                               </div>
                             </div>
                             <div style={{background:"white",padding:"10px 14px"}}>
-                              <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,
-                                color:isFreeT?"#16A34A":V.text}}>
-                                {isFreeT ? "Free" : `${tt.price} OG`}
-                              </div>
-                              <div style={{fontSize:11,color:V.mutedL,marginTop:1}}>per ticket</div>
+                              {isFreeT ? (
+                                <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,color:"#16A34A"}}>Free</div>
+                              ) : (
+                                <>
+                                  <div style={{fontFamily:"Outfit",fontWeight:900,fontSize:16,color:V.text}}>
+                                    ${(parseFloat(tt.price||0)*OG_TO_USD_RATE).toFixed(2)}
+                                  </div>
+                                  <div style={{fontSize:11,color:V.mutedL,marginTop:1}}>{tt.price} OG · per ticket</div>
+                                </>
+                              )}
                             </div>
                           </div>
                         );

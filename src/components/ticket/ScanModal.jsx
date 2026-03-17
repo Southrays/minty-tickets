@@ -5,14 +5,23 @@ import { V } from "../../utils/constants";
 import { formatDate, shortAddr } from "../../utils/format";
 import { getReadContract, getWriteContract } from "../../utils/contract";
 
-// QR epoch window: accept current epoch and 1 epoch behind (max ~2 min old)
-const QR_EPOCH_SECS = 60;
-function currentEpoch() { return Math.floor(Date.now() / (QR_EPOCH_SECS * 1000)); }
+// QR format v2: MINTY|{v}|{tokenId}|{eventId}|{issuedAt}|{expiresAt}|{sig}
+// issuedAt/expiresAt are unix seconds; we accept within SESSION window
 function parseQR(raw) {
-  // Format: MINTY-{tokenId}-{eventId}-{epoch}
+  if (!raw || !raw.startsWith("MINTY")) return null;
+  // v2 pipe format
+  const parts = raw.split("|");
+  if (parts.length >= 6 && parts[0] === "MINTY") {
+    const tokenId   = Number(parts[2]);
+    const eventId   = Number(parts[3]);
+    const expiresAt = Number(parts[5]);
+    if (isNaN(tokenId) || isNaN(eventId) || isNaN(expiresAt)) return null;
+    return { tokenId, eventId, expiresAt, sig: parts[6] || "" };
+  }
+  // Legacy dash format: MINTY-{tokenId}-{eventId}-{epoch}
   const m = raw.match(/^MINTY-(\d+)-(\d+)-(\d+)$/);
-  if (!m) return null;
-  return { tokenId: Number(m[1]), eventId: Number(m[2]), epoch: Number(m[3]) };
+  if (m) return { tokenId: Number(m[1]), eventId: Number(m[2]), expiresAt: Date.now()/1000 + 120 };
+  return null;
 }
 
 // ── Verify a ticket on-chain and call checkIn ──────────────────────────────
@@ -208,9 +217,9 @@ export default function ScanModal({ events = [], wallet, onClose }) {
         setScan("done"); setResult({ ok: false }); return;
       }
 
-      const { tokenId, eventId, epoch } = parsed;
-      if (epoch < currentEpoch() - 2) {
-        setResultErr("QR code expired. Ask attendee to re-reveal their ticket.");
+      const { tokenId, eventId, expiresAt } = parsed;
+      if (expiresAt && Date.now() / 1000 > expiresAt) {
+        setResultErr("QR code expired. Ask the attendee to re-reveal their ticket.");
         setScan("done"); setResult({ ok: false }); return;
       }
       if (selRef.current && eventId !== selRef.current.id) {
@@ -243,6 +252,14 @@ export default function ScanModal({ events = [], wallet, onClose }) {
     setResult(null); setResultErr(""); lastRawRef.current = ""; setScan("scanning");
   };
 
+  // Auto-clear error result after 4 seconds so the Scan Next button stays visible
+  useEffect(() => {
+    if (scanState === "done" && result && !result.ok) {
+      const t = setTimeout(() => resetScan(), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [scanState, result]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="mbd" onClick={e => e.target === e.currentTarget && onClose()}
@@ -267,8 +284,8 @@ export default function ScanModal({ events = [], wallet, onClose }) {
             </div>
           ) : (
             <>
-              {/* Check-in manager: scan for another organizer */}
-              <div style={{marginBottom:12,background:V.b50,borderRadius:12,padding:"10px 12px",border:"1px solid "+V.b100}}>
+              {/* Check-in manager: scan for another organizer — hidden once event is selected */}
+              {!sel && <div style={{marginBottom:12,background:V.b50,borderRadius:12,padding:"10px 12px",border:"1px solid "+V.b100}}>
                 <div style={{fontSize:11,fontFamily:"Outfit",fontWeight:700,color:V.brand,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8}}>
                   Scan for another organizer
                 </div>
@@ -291,7 +308,7 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                     <X size={10}/>Clear — show my events
                   </button>
                 )}
-              </div>
+              </div>}
 
               {/* Event selector */}
               <div style={{marginBottom:16,position:"relative",zIndex:100}}>
@@ -460,16 +477,16 @@ export default function ScanModal({ events = [], wallet, onClose }) {
                     </div>
                   )}
 
-                  {/* Error result */}
+                  {/* Error result — truncated, auto-clears after 4s */}
                   {scanState==="done" && result && !result.ok && (
-                    <div style={{background:"#FEF2F2",border:"1px solid #FCA5A5",borderRadius:14,padding:18,marginBottom:10}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                        <div style={{width:38,height:38,borderRadius:11,background:"#FEE2E2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <XCircle size={20} color="#EF4444"/>
+                    <div style={{background:"#FEF2F2",border:"1px solid #FCA5A5",borderRadius:14,padding:"12px 16px",marginBottom:10}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <XCircle size={18} color="#EF4444" style={{flexShrink:0}}/>
+                        <div style={{fontSize:13,color:"#B91C1C",fontFamily:"Outfit",fontWeight:600,
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
+                          {resultErr.length > 80 ? resultErr.slice(0,77)+"…" : resultErr}
                         </div>
-                        <div style={{fontFamily:"Outfit",fontWeight:800,fontSize:15,color:"#DC2626"}}>Invalid Ticket</div>
                       </div>
-                      <div style={{fontSize:13,color:"#B91C1C",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{resultErr}</div>
                     </div>
                   )}
 
